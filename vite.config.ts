@@ -48,14 +48,18 @@ export default defineConfig({
       router: {
         basepath: normalizedAppBase,
       },
-      spa: {
-        enabled: true,
-        maskPath: normalizedAppBase,
+      // SPA mode always forces a prerender shell; that step crashes on the
+      // Vercel Nitro preset. Use SSR instead and skip prerender entirely.
+      prerender: {
+        enabled: false,
       },
     }),
     nitro({
       baseURL: normalizedAppBase,
       inlineDynamicImports: true,
+      vercel: {
+        entryFormat: 'node',
+      },
     }),
     react(),
     // Skip Sentry upload when no auth token is present (local / Vercel CI).
