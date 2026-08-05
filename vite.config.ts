@@ -48,13 +48,16 @@ export default defineConfig({
       router: {
         basepath: normalizedAppBase,
       },
-      spa: {
-        enabled: true,
-        maskPath: normalizedAppBase,
-        prerender: {
-          enabled: false,
-        },
+      prerender: {
+        enabled: false,
       },
+      // SPA prerender always runs when enabled and fails on Vercel (shiki __dirname).
+      spa: process.env.VERCEL
+        ? { enabled: false }
+        : {
+            enabled: true,
+            maskPath: normalizedAppBase,
+          },
     }),
     nitro({
       baseURL: normalizedAppBase,
