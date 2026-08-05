@@ -1,5 +1,11 @@
-import sharp from 'sharp';
 import * as potrace from 'potrace';
+
+type SharpModule = typeof import('sharp').default;
+
+async function loadSharp(): Promise<SharpModule> {
+  const module = await import('sharp');
+  return module.default;
+}
 
 export type OutlinePoint = [number, number];
 
@@ -19,6 +25,7 @@ const CURVE_COMMANDS = new Set(['C', 'S', 'Q', 'T', 'A']);
 export async function traceOutline(
   imageBytes: Uint8Array,
 ): Promise<TracedOutline> {
+  const sharp = await loadSharp();
   const source = sharp(Buffer.from(imageBytes)).ensureAlpha();
   const meta = await source.metadata();
   const width = meta.width ?? 0;
@@ -37,7 +44,7 @@ export async function traceOutline(
     .png()
     .toBuffer();
 
-  const blackOnWhite = await borderIsLight(flattened, width, height);
+  const blackOnWhite = await borderIsLight(sharp, flattened, width, height);
 
   const svg = await new Promise<string>((resolve, reject) => {
     potrace.trace(
@@ -78,6 +85,7 @@ export async function traceOutline(
 }
 
 async function borderIsLight(
+  sharp: SharpModule,
   grayscalePng: Buffer,
   width: number,
   height: number,

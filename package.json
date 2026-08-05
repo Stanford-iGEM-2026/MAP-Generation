@@ -126,6 +126,9 @@
     "typescript-eslint": "^8.7.0",
     "vite": "^8.0.11"
   },
+  "optionalDependencies": {
+    "@img/sharp-linux-x64": "0.35.3"
+  },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
       "eslint",

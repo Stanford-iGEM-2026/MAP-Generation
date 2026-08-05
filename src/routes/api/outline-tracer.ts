@@ -10,7 +10,6 @@ import {
   requireUser,
 } from '@/server/api';
 import { getAnonSupabaseClient } from '@/server/supabaseClient';
-import { traceOutline } from '@/server/outlineTrace';
 
 export const Route = createFileRoute('/api/outline-tracer')({
   server: {
@@ -64,6 +63,7 @@ export const Route = createFileRoute('/api/outline-tracer')({
         let traced;
         try {
           const bytes = new Uint8Array(await imageBlob.arrayBuffer());
+          const { traceOutline } = await import('@/server/outlineTrace');
           traced = await traceOutline(bytes);
         } catch (err) {
           return json(

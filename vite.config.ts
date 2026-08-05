@@ -61,8 +61,8 @@ export default defineConfig({
     }),
     nitro({
       baseURL: normalizedAppBase,
-      inlineDynamicImports: true,
       preset: process.env.VERCEL ? 'vercel' : 'node-server',
+      traceDeps: ['sharp', '@img/sharp-linux-x64'],
     }),
     react(),
     sentryVitePlugin({
