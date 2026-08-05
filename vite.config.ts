@@ -56,7 +56,7 @@ export default defineConfig({
     nitro({
       baseURL: normalizedAppBase,
       inlineDynamicImports: true,
-      preset: process.env.VERCEL ? 'vercel' : undefined,
+      preset: process.env.VERCEL ? 'vercel' : 'node-server',
     }),
     react(),
     sentryVitePlugin({

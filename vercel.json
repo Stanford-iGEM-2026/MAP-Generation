@@ -1,10 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "tanstack-start",
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/cadam",
-      "permanent": false
-    }
-  ]
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "regions": ["sfo1"]
 }

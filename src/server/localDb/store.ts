@@ -8,10 +8,11 @@ export type Row = Record<string, unknown>;
 
 export type LocalDatabase = Record<TableName, Row[]>;
 
-const DATA_DIR =
-  process.env.VERCEL === '1'
-    ? path.join('/tmp', 'kele-local-data')
-    : path.resolve(process.cwd(), '.local-data');
+// On Vercel, only /tmp is writable — use it so API routes don't crash.
+// Note: serverless instances don't share /tmp; data is ephemeral per instance.
+const DATA_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'kele-local-data')
+  : path.resolve(process.cwd(), '.local-data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 const STORAGE_DIR = path.join(DATA_DIR, 'storage');
 
