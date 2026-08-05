@@ -13,7 +13,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react';
-import { Conversation, ConversationSettings } from '@shared/types';
+import { Conversation } from '@shared/types';
 import type { AppUIMessage } from '@shared/chatAi';
 import { asParametricParts } from '@shared/parametricParts';
 import { HistoryConversation } from '../types/misc.ts';
@@ -21,6 +21,7 @@ import { ConversationCard } from '@/components/history/ConversationCard';
 import { VisualCard } from '@/components/history/VisualCard';
 import { RenameDialogDrawer } from '@/components/history/RenameDialogDrawer';
 import { cn } from '@/lib/utils';
+import { useDeleteConversation } from '@/hooks/useDeleteConversation';
 
 const VIEW_TRANSITION_PROPS = {
   initial: { opacity: 0, y: 10, filter: 'blur(2px)' },
@@ -70,11 +71,13 @@ export function HistoryView() {
           .order('updated_at', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1, { referencedTable: 'first_message' })
-          .overrideTypes<Array<{ settings: ConversationSettings }>>();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .overrideTypes<any>();
 
       if (conversationsError) throw conversationsError;
 
-      const formattedConversations = conversationsData.map((conv) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const formattedConversations = conversationsData.map((conv: any) => {
         const parts = conv.first_message?.[0]?.parts;
         const messageCount = conv.messagesCount?.[0]?.count ?? 0;
 
@@ -93,7 +96,7 @@ export function HistoryView() {
         };
       });
 
-      return formattedConversations;
+      return formattedConversations as HistoryConversation[];
     },
   });
 
@@ -107,57 +110,7 @@ export function HistoryView() {
     }
   }, [conversationQuery.isError, toast]);
 
-  const deleteConversation = useMutation({
-    mutationFn: async (conversationId: string) => {
-      const { error } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', conversationId);
-
-      if (error) throw error;
-
-      supabase.storage
-        .from('images')
-        .list(`${user?.id}/${conversationId}`)
-        .then(({ data: list }) => {
-          if (list) {
-            const filesToRemove = list.map(
-              (file) => `${user?.id}/${conversationId}/${file.name}`,
-            );
-            supabase.storage.from('images').remove(filesToRemove);
-          }
-        });
-    },
-    onMutate: async (conversationId) => {
-      await queryClient.cancelQueries({ queryKey: ['conversations'] });
-      const previousConversations = queryClient.getQueryData(['conversations']);
-      queryClient.setQueryData(
-        ['conversations'],
-        (old: HistoryConversation[]) =>
-          old.filter((conv) => conv.id !== conversationId),
-      );
-      return { previousConversations };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      toast({
-        title: 'Success',
-        description: 'Conversation deleted successfully',
-      });
-    },
-    onError: (error: unknown, _conversationId: string, context) => {
-      console.error('Error deleting conversation:', error);
-      queryClient.setQueryData(
-        ['conversations'],
-        context?.previousConversations,
-      );
-      toast({
-        title: 'Error',
-        description: 'Failed to delete conversation',
-        variant: 'destructive',
-      });
-    },
-  });
+  const deleteConversation = useDeleteConversation();
 
   const renameConversation = useMutation({
     mutationFn: async ({
@@ -367,7 +320,7 @@ export function HistoryView() {
               placeholder="Search generations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-0 bg-adam-background-2 pl-6 text-base shadow-[inset_0_0_10px_0_rgba(0,0,0,0.32),0_0_0_2px_rgba(0,0,0,0)] ring-0 transition-shadow duration-300 ease-in-out hover:shadow-[inset_0_0_4px_0_rgba(0,0,0,0.16),0_0_0_2px_rgba(60,60,60,1)] focus:shadow-[inset_0_0_4px_0_rgba(0,0,0,0.16),0_0_0_2px_#00A6FF] focus:outline-none sm:text-sm"
+              className="border-0 bg-adam-background-2 pl-6 text-base shadow-[inset_0_0_10px_0_rgba(0,0,0,0.32),0_0_0_2px_rgba(0,0,0,0)] ring-0 transition-shadow duration-300 ease-in-out hover:shadow-[inset_0_0_4px_0_rgba(0,0,0,0.16),0_0_0_2px_rgba(60,60,60,1)] focus:shadow-[inset_0_0_4px_0_rgba(0,0,0,0.16),0_0_0_2px_#7EC8FF] focus:outline-none sm:text-sm"
             />
           </div>
         </div>

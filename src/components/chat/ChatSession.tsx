@@ -23,10 +23,7 @@ import type {
   ConversationTitleUpdate,
 } from '@shared/chatAi';
 import { useChat } from '@ai-sdk/react';
-import {
-  DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithToolCalls,
-} from 'ai';
+import { DefaultChatTransport } from 'ai';
 import Tree from '@shared/Tree';
 import { isParametricArtifact } from '@shared/parametricParts';
 import type {
@@ -72,7 +69,6 @@ interface ChatSessionProps {
   ) => Promise<void>;
   onChangeRating: (messageId: string, rating: number) => void;
   onViewArtifact: (artifact: ParametricArtifact, messageId: string) => void;
-  onViewMesh: (meshId: string, messageId: string) => void;
   /** Fired whenever the SDK's submitted/streaming flag flips. Lets the
    *  parent show the bouncing loader in the preview pane while the model
    *  is still producing the next artifact. */
@@ -154,7 +150,6 @@ export function ChatSession({
   onToolOutput,
   onChangeRating,
   onViewArtifact,
-  onViewMesh,
   onLoadingChange,
 }: ChatSessionProps) {
   const { user } = useAuth();
@@ -204,11 +199,7 @@ export function ChatSession({
   const transport = useMemo(
     () =>
       new DefaultChatTransport<AppUIMessage>({
-        api: apiUrl(
-          conversation.type === 'creative'
-            ? 'creative-chat'
-            : 'parametric-chat',
-        ),
+        api: apiUrl('parametric-chat'),
         headers: authHeaders,
         fetch: billingAwareFetch,
         prepareSendMessagesRequest: ({ body }) => ({
@@ -219,7 +210,7 @@ export function ChatSession({
           },
         }),
       }),
-    [authHeaders, billingAwareFetch, conversation.id, conversation.type, model],
+    [authHeaders, billingAwareFetch, conversation.id, model],
   );
 
   // ───────────────────────────────────────────────────────────────────────
@@ -552,7 +543,7 @@ export function ChatSession({
             toast({
               title: "Couldn't save this step",
               description:
-                "The model is shown but the build wasn't saved, so Adam paused. Please retry.",
+                "The model is shown but the build wasn't saved, so Kele paused. Please retry.",
               variant: 'destructive',
             });
           }
@@ -586,9 +577,7 @@ export function ChatSession({
     // the server against a stale DB branch (see `persistFailedRef`).
     sendAutomaticallyWhen: (ctx) => {
       if (persistFailedRef.current) return false;
-      return conversation.type === 'parametric'
-        ? lastAssistantMessageIsCompleteWithParametricBuild(ctx)
-        : lastAssistantMessageIsCompleteWithToolCalls(ctx);
+      return lastAssistantMessageIsCompleteWithParametricBuild(ctx);
     },
     // Out-of-band conversation-level signals (title + suggestions) arrive
     // here as transient data parts — they never land in `messages.parts`,
@@ -661,7 +650,7 @@ export function ChatSession({
       }
       const message = error instanceof Error ? error.message : String(error);
       toast({
-        title: 'Adam ran into a problem',
+        title: 'Kele ran into a problem',
         description: message || 'The model call failed. Please try again.',
         variant: 'destructive',
       });
@@ -797,18 +786,11 @@ export function ChatSession({
   useEffect(() => {
     const preview = findLatestPreview(messages);
     if (!preview) return;
-    const key =
-      preview.type === 'artifact'
-        ? `artifact:${preview.messageId}:${preview.artifact.code.length}`
-        : `mesh:${preview.messageId}:${preview.meshId}`;
+    const key = `artifact:${preview.messageId}:${preview.artifact.code.length}`;
     if (lastAutoAppliedPreviewKeyRef.current === key) return;
     lastAutoAppliedPreviewKeyRef.current = key;
-    if (preview.type === 'artifact') {
-      onViewArtifact(preview.artifact, preview.messageId);
-    } else {
-      onViewMesh(preview.meshId, preview.messageId);
-    }
-  }, [messages, onViewArtifact, onViewMesh]);
+    onViewArtifact(preview.artifact, preview.messageId);
+  }, [messages, onViewArtifact]);
 
   // ───────────────────────────────────────────────────────────────────────
   // Action handlers. Pattern: await the parent's DB write, then call the
@@ -829,7 +811,7 @@ export function ChatSession({
         (p) => p.type === 'data-mesh-context',
       ).length;
       posthog.capture('message_sent', {
-        type: conversation.type,
+        type: 'parametric',
         model_name: model,
         text,
         image_count: imageCount,
@@ -848,7 +830,7 @@ export function ChatSession({
         { body: { model } },
       );
     },
-    [conversation.id, conversation.type, model, onSendParts, sendMessage],
+    [conversation.id, model, onSendParts, sendMessage],
   );
 
   const handleEditUserText = useCallback(
@@ -927,7 +909,6 @@ export function ChatSession({
                   node.role === 'user' ? handleEditUserText : undefined
                 }
                 onViewArtifact={(artifact) => onViewArtifact(artifact, node.id)}
-                onViewMesh={(meshId) => onViewMesh(meshId, node.id)}
                 onChangeRating={
                   node.role === 'assistant'
                     ? (rating) => onChangeRating(node.id, rating)
@@ -979,9 +960,8 @@ export function ChatSession({
             </div>
           ))}
         <TextAreaChat
-          type={conversation.type}
           onSubmit={(parts) => void handleSend(parts)}
-          placeholder="Keep iterating with Adam..."
+          placeholder="Keep iterating with Kele..."
           isLoading={isLoading}
           stopGenerating={stop}
           disabled={isDisabled}
@@ -994,10 +974,11 @@ export function ChatSession({
   );
 }
 
-type LatestPreview =
-  | { type: 'artifact'; messageId: string; artifact: ParametricArtifact }
-  | { type: 'mesh'; messageId: string; meshId: string }
-  | null;
+type LatestPreview = {
+  type: 'artifact';
+  messageId: string;
+  artifact: ParametricArtifact;
+} | null;
 
 function findLatestPreview(messages: AppUIMessage[]): LatestPreview {
   for (
@@ -1021,16 +1002,6 @@ function findLatestPreview(messages: AppUIMessage[]): LatestPreview {
           type: 'artifact',
           messageId: message.id,
           artifact: part.input,
-        };
-      }
-      if (
-        part.type === 'tool-create_mesh' &&
-        part.state === 'output-available'
-      ) {
-        return {
-          type: 'mesh',
-          messageId: message.id,
-          meshId: part.output.id,
         };
       }
     }

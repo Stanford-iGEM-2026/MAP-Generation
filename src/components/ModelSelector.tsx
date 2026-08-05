@@ -11,7 +11,6 @@ import { ProviderLogo } from '@/components/ProviderLogo';
 import { cn } from '@/lib/utils';
 import { Model } from '@shared/types';
 import { ModelConfig } from '../types/misc.ts';
-import { useConversation } from '@/contexts/ConversationContext';
 
 interface ModelSelectorProps {
   models: ModelConfig[];
@@ -19,7 +18,6 @@ interface ModelSelectorProps {
   onModelChange: (modelId: Model) => void;
   disabled?: boolean;
   className?: string;
-  type?: 'parametric' | 'creative'; // Optional type prop that takes precedence over conversation context
   focused?: boolean; // New prop to indicate if text area is focused
 }
 
@@ -29,14 +27,9 @@ export function ModelSelector({
   onModelChange,
   className,
   disabled,
-  type,
   focused = false,
 }: ModelSelectorProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const { conversation } = useConversation();
-
-  // Use provided type prop or fall back to conversation context
-  const currentType = type || conversation.type;
 
   // Track previous model name for slide animation
   const [prevModelName, setPrevModelName] = useState<string | null>(null);
@@ -45,12 +38,8 @@ export function ModelSelector({
 
   const selectedModelConfig = models.find((m) => m.id === selectedModel);
 
-  // Store previous selected model name and type
+  // Store previous selected model name
   const prevNameRef = useRef<string | undefined>(selectedModelConfig?.name);
-  const prevTypeRef = useRef<'parametric' | 'creative' | undefined>(
-    currentType,
-  );
-  const recentTypeChangeRef = useRef<number>(0); // Timestamp of last type change
 
   // ---------------------------------------------------------------------------
   // Focus management
@@ -78,33 +67,16 @@ export function ModelSelector({
       setPrevModelName(prevNameRef.current);
       setIsSliding(true);
 
-      // Check if type changed (mode switch)
-      const typeChanged = prevTypeRef.current !== currentType;
-      const now = Date.now();
-      const recentTypeChange = now - recentTypeChangeRef.current < 100; // Within 100ms
-
-      if (typeChanged) {
-        // Mode switching logic: parametric = down, creative = up
-        const direction = currentType === 'parametric' ? 'down' : 'up';
+      const prevIndex = models.findIndex((m) => m.name === prevNameRef.current);
+      const newIndex = models.findIndex((m) => m.id === selectedModel);
+      if (prevIndex !== -1 && newIndex !== -1) {
+        const direction = newIndex > prevIndex ? 'up' : 'down';
         setSlideDirection(direction);
-        recentTypeChangeRef.current = now;
-      } else if (!recentTypeChange) {
-        // Within same mode: preserve existing index-based logic
-        // But only if we haven't had a recent type change
-        const prevIndex = models.findIndex(
-          (m) => m.name === prevNameRef.current,
-        );
-        const newIndex = models.findIndex((m) => m.id === selectedModel);
-        if (prevIndex !== -1 && newIndex !== -1) {
-          const direction = newIndex > prevIndex ? 'up' : 'down';
-          setSlideDirection(direction);
-        }
       }
     }
 
     prevNameRef.current = selectedModelConfig?.name;
-    prevTypeRef.current = currentType;
-  }, [selectedModelConfig?.name, currentType, models, selectedModel]);
+  }, [selectedModelConfig?.name, models, selectedModel]);
 
   const handleSlideEnd = () => {
     setPrevModelName(null);

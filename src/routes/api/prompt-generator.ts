@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { createAnthropicText } from '@/server/anthropic';
+import { createOpenAIText } from '@/server/openaiText';
 import {
   isRecord,
   isUnauthorizedError,
@@ -9,10 +9,8 @@ import {
   requireUser,
 } from '@/server/api';
 
-const CREATIVE_PROMPT =
-  'Generate a short creative prompt for an organic 3D form, character, figurine, sculpture, or artistic object. Return only the prompt text.';
 const PARAMETRIC_PROMPT =
-  'Generate a short prompt for a practical dimensional household object or functional part. Include dimensions when useful. Return only the prompt text.';
+  'Generate a short prompt for a microneedle array patch design. Vary the needle shape (conical, pyramidal, frustum-tipped), backing shape (circular, oval, rectangular), density/pitch, or target application area. Include dimensions when useful. Return only the prompt text.';
 const MAX_EXISTING_TEXT_LENGTH = 2000;
 
 export const Route = createFileRoute('/api/prompt-generator')({
@@ -35,16 +33,14 @@ export const Route = createFileRoute('/api/prompt-generator')({
             return json({ error: 'invalid_existing_text' }, 400);
           }
           const existingText = body.existingText;
-          const base =
-            body.type === 'parametric' ? PARAMETRIC_PROMPT : CREATIVE_PROMPT;
           const content = existingText
-            ? `${base}\n\nImprove this existing prompt while preserving its intent:\n${existingText}`
-            : base;
-          const prompt = await createAnthropicText({
-            model: 'claude-haiku-4-5-20251001',
+            ? `${PARAMETRIC_PROMPT}\n\nImprove this existing prompt while preserving its intent:\n${existingText}`
+            : PARAMETRIC_PROMPT;
+          const prompt = await createOpenAIText({
+            model: 'gpt-4o-mini',
             maxTokens: 200,
             system:
-              'You write concise 3D generation prompts. Return only the prompt text, no quotes or explanation.',
+              'You write concise microneedle array patch design prompts. Return only the prompt text, no quotes or explanation.',
             content,
           });
           return json({ prompt });

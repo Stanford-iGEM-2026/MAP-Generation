@@ -1,4 +1,3 @@
-import { useMeshData } from '@/hooks/useMeshData';
 import { Loader2 } from 'lucide-react';
 import {
   useCallback,
@@ -9,10 +8,7 @@ import {
   useState,
 } from 'react';
 import * as THREE from 'three';
-import { GLTF, GLTFLoader, GLTFParser } from 'three-stdlib';
-import { STLLoader } from 'three/addons/loaders/STLLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTF } from 'three-stdlib';
 import { useConversation } from '@/contexts/ConversationContext';
 import * as omggif from 'omggif';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -31,14 +27,12 @@ const fragmentShader = quantizeFragmentShader;
 
 export function MeshGifPreview({
   ref,
-  meshId,
   externalGltf,
   setIsGenerating,
   setProgress,
   setReadyToDownload,
 }: {
   ref: React.RefObject<{ downloadGIF: () => Promise<void> } | null>;
-  meshId?: string;
   externalGltf?: GLTF | null;
   setIsGenerating: (isGenerating: boolean) => void;
   setProgress: (progress: number) => void;
@@ -49,7 +43,7 @@ export function MeshGifPreview({
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const logoImage = useMemo(() => {
     const img = new Image();
-    img.src = `${import.meta.env.BASE_URL}/adam-logo-full.svg`; // served from public folder root
+    img.src = `${import.meta.env.BASE_URL}/kele-logo.png`;
     return img;
   }, []);
   const isGeneratingRef = useRef(false);
@@ -115,188 +109,8 @@ export function MeshGifPreview({
   }, [cleanupThreeJS]);
 
   useEffect(() => {
-    if (externalGltf !== undefined) {
-      setGltf(externalGltf);
-      return;
-    }
-    setGltf(null);
-  }, [meshId, externalGltf]);
-
-  const {
-    data: { data: meshData, isLoading: isMeshDataLoading },
-    blob: { data: mesh, isLoading: isMeshLoading },
-  } = useMeshData({
-    id: meshId ?? '',
-  });
-
-  useEffect(() => {
-    if (externalGltf) return; // skip blob load when caller provided gltf directly
-    const loadMesh = async (meshBlob: Blob) => {
-      try {
-        const fileType = meshData?.file_type || 'glb';
-        const arrayBuffer = await meshBlob.arrayBuffer();
-
-        if (fileType === 'stl') {
-          // Handle STL files
-          const loader = new STLLoader();
-          const geometry = loader.parse(arrayBuffer);
-
-          // Center the geometry
-          geometry.center();
-          geometry.computeVertexNormals();
-
-          // Create a mesh with the STL geometry
-          const material = new THREE.MeshStandardMaterial({
-            color: 0x888888,
-            metalness: 0.6,
-            roughness: 0.3,
-          });
-          const stlMesh = new THREE.Mesh(geometry, material);
-
-          // Create a GLTF-like structure for compatibility
-          const scene = new THREE.Group();
-          scene.add(stlMesh);
-
-          const mockGltf: GLTF = {
-            scene: scene,
-            scenes: [scene],
-            cameras: [],
-            animations: [],
-            asset: {},
-            parser: {} as GLTFParser,
-            userData: {},
-          };
-
-          setGltf(mockGltf);
-        } else if (fileType === 'obj') {
-          // Handle OBJ files
-          const loader = new OBJLoader();
-          const objText = new TextDecoder().decode(arrayBuffer);
-          const objGroup = loader.parse(objText);
-
-          // Create a GLTF-like structure for compatibility
-          const mockGltf: GLTF = {
-            scene: objGroup,
-            scenes: [objGroup],
-            cameras: [],
-            animations: [],
-            asset: {},
-            parser: {} as GLTFParser,
-            userData: {},
-          };
-
-          setGltf(mockGltf);
-        } else if (fileType === 'fbx') {
-          // Handle FBX files (binary format from Tripo API)
-          try {
-            const loader = new FBXLoader();
-            // FBX files from Tripo are binary format, not text
-            // Use the binary data directly
-            const fbxGroup = loader.parse(arrayBuffer, '');
-
-            // Scale down FBX models (they tend to be very large)
-            fbxGroup.scale.setScalar(0.01); // Scale to 1% of original size
-
-            // Center the model
-            const box = new THREE.Box3().setFromObject(fbxGroup);
-            const center = box.getCenter(new THREE.Vector3());
-            fbxGroup.position.sub(center);
-
-            // Convert FBX materials to MeshStandardMaterial for consistency
-            fbxGroup.traverse((child) => {
-              if (child instanceof THREE.Mesh && child.material) {
-                const materials = Array.isArray(child.material)
-                  ? child.material
-                  : [child.material];
-
-                const convertedMaterials = materials.map((mat) => {
-                  // If it's already MeshStandardMaterial, keep it
-                  if (mat instanceof THREE.MeshStandardMaterial) {
-                    return mat;
-                  }
-
-                  // Convert other material types to MeshStandardMaterial
-                  const standardMat = new THREE.MeshStandardMaterial();
-
-                  // Copy common properties
-                  if ('color' in mat && mat.color) {
-                    standardMat.color = mat.color.clone();
-                  }
-                  if ('map' in mat && mat.map) {
-                    standardMat.map = mat.map;
-                  }
-                  if ('normalMap' in mat && mat.normalMap) {
-                    standardMat.normalMap = mat.normalMap;
-                  }
-                  if ('emissive' in mat && mat.emissive) {
-                    standardMat.emissive = mat.emissive.clone();
-                  }
-                  if ('emissiveMap' in mat && mat.emissiveMap) {
-                    standardMat.emissiveMap = mat.emissiveMap;
-                  }
-
-                  // Set default PBR values
-                  standardMat.roughness = 0.5;
-                  standardMat.metalness = 0.0;
-
-                  // Copy other properties
-                  standardMat.transparent = mat.transparent;
-                  standardMat.opacity = mat.opacity;
-                  standardMat.side = mat.side;
-
-                  // Dispose of the original material to free WebGL resources
-                  mat.dispose();
-
-                  return standardMat;
-                });
-
-                // Apply the converted materials
-                if (Array.isArray(child.material)) {
-                  child.material = convertedMaterials;
-                } else {
-                  child.material = convertedMaterials[0];
-                }
-              }
-            });
-
-            // Create a GLTF-like structure for compatibility
-            const mockGltf: GLTF = {
-              scene: fbxGroup,
-              scenes: [fbxGroup],
-              cameras: [],
-              animations: [],
-              asset: {},
-              parser: {} as GLTFParser,
-              userData: {},
-            };
-
-            setGltf(mockGltf);
-          } catch {
-            // Silently fail and continue
-          }
-        } else {
-          // Handle GLB files (original logic)
-          const loader = new GLTFLoader();
-          loader.parse(
-            arrayBuffer,
-            '',
-            (parsedGltf) => {
-              setGltf(parsedGltf);
-            },
-            (error) => {
-              console.error('Error loading GLB model:', error);
-            },
-          );
-        }
-      } catch (error) {
-        console.error('Error processing mesh:', error);
-      }
-    };
-
-    if (mesh && meshData) {
-      loadMesh(mesh);
-    }
-  }, [mesh, meshData, externalGltf]);
+    setGltf(externalGltf ?? null);
+  }, [externalGltf]);
 
   const renderer = useMemo(() => {
     if (!canvas) {
@@ -673,13 +487,11 @@ export function MeshGifPreview({
     });
   }, [gltf, renderer]);
 
-  // Show a spinner whenever we don't yet have anything to draw — the
-  // meshId fetch path covers Tripo GLB downloads, and `!gltf` covers the
-  // OpenSCAD compile path where render() stays a no-op until the caller
-  // hands us a gltf via externalGltf. Without this the canvas just sits
-  // there as a transparent rectangle showing the dark wrapper through.
-  const meshLoading = !!meshId && (isMeshDataLoading || isMeshLoading);
-  const showLoader = !gltf && (meshLoading || !meshId);
+  // Show a spinner until the caller's OpenSCAD compile hands us a gltf via
+  // externalGltf — render() stays a no-op until then. Without this the
+  // canvas just sits there as a transparent rectangle showing the dark
+  // wrapper through.
+  const showLoader = !gltf;
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2">
@@ -690,8 +502,8 @@ export function MeshGifPreview({
           ref={canvasRefCallback}
         />
         <img
-          src={`${import.meta.env.BASE_URL}/adam-logo-full.svg`}
-          alt="ADAM logo"
+          src={`${import.meta.env.BASE_URL}/kele-logo.png`}
+          alt="Kele logo"
           className="pointer-events-none absolute bottom-3 right-3 w-[15%] select-none"
         />
         {showLoader ? (

@@ -1,31 +1,15 @@
-import {
-  createClient,
-  type SupabaseClientOptions,
-} from '@supabase/supabase-js';
-import type { Database } from '@shared/database';
-import { requiredEnv } from './env';
+import { createLocalClient, type LocalClient } from './localDb/client';
 
-export type SupabaseClient = ReturnType<typeof getAnonSupabaseClient>;
+export type SupabaseClient = LocalClient;
 
-export function getAnonSupabaseClient(
-  options?: SupabaseClientOptions<'public'>,
-) {
-  return createClient<Database, 'public'>(
-    requiredEnv('VITE_SUPABASE_URL'),
-    requiredEnv('VITE_SUPABASE_ANON_KEY'),
-    options,
-  );
+export function getAnonSupabaseClient(_options?: {
+  global?: { headers?: Record<string, string> };
+}) {
+  return createLocalClient(_options);
 }
 
-export function getServiceRoleSupabaseClient(
-  options?: SupabaseClientOptions<'public'>,
-) {
-  return createClient<Database, 'public'>(
-    requiredEnv('VITE_SUPABASE_URL'),
-    requiredEnv('SUPABASE_SERVICE_ROLE_KEY'),
-    {
-      ...options,
-      auth: { autoRefreshToken: false, persistSession: false },
-    },
-  );
+export function getServiceRoleSupabaseClient(_options?: {
+  global?: { headers?: Record<string, string> };
+}) {
+  return createLocalClient(_options);
 }

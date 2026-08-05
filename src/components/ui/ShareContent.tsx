@@ -11,7 +11,6 @@ import {
   handleTwitterShare,
   handleWhatsAppShare,
 } from '@/utils/shareUtils';
-import { MeshGifPreview } from '../viewer/MeshGifPreview';
 import { OpenSCADGifPreview } from '../viewer/OpenSCADGifPreview';
 import { cn } from '@/lib/utils';
 import type React from 'react';
@@ -20,7 +19,6 @@ type ShareContentProps = {
   conversationId: string;
   privacy: 'public' | 'private';
   onPrivacyChange: (privacy: 'public' | 'private') => void;
-  meshId?: string;
   openscadCode?: string;
 };
 
@@ -28,7 +26,6 @@ export function ShareContent({
   conversationId,
   privacy,
   onPrivacyChange,
-  meshId,
   openscadCode,
 }: ShareContentProps) {
   const [justCopied, setJustCopied] = useState(false);
@@ -69,30 +66,14 @@ export function ShareContent({
           {isPublic ? 'Anyone with the link can view' : 'Only you can view'}
         </div>
 
-        {/* Local Suspense boundary — anything inside the preview (the
-            OpenSCAD worker via `useOpenSCAD`, the mesh blob fetch in
-            `MeshGifPreview`, react-query effects, etc.) can throw a
-            promise during a normal page load. Without this fence, that
-            suspension bubbles up to TanStack StartClient's `<Await>` and
-            tears the whole popover subtree down — including the worker
-            that's mid-compile — so the OpenSCAD STL never lands and the
-            canvas stays black. Hot reload happens to skip the doomed
-            path, which is why it appears to "work" after HMR. */}
-        {meshId ? (
-          <Suspense
-            fallback={
-              <div className="h-56 overflow-hidden rounded-lg border border-adam-neutral-700 bg-adam-neutral-950" />
-            }
-          >
-            <MeshGifPreview
-              ref={downloadGifRef}
-              meshId={meshId}
-              setIsGenerating={setIsGenerating}
-              setProgress={setProgress}
-              setReadyToDownload={setReadyToDownload}
-            />
-          </Suspense>
-        ) : openscadCode ? (
+        {/* Local Suspense boundary — the OpenSCAD worker via `useOpenSCAD`
+            can throw a promise during a normal page load. Without this
+            fence, that suspension bubbles up to TanStack StartClient's
+            `<Await>` and tears the whole popover subtree down — including
+            the worker that's mid-compile — so the OpenSCAD STL never lands
+            and the canvas stays black. Hot reload happens to skip the
+            doomed path, which is why it appears to "work" after HMR. */}
+        {openscadCode ? (
           <Suspense
             fallback={
               <div className="h-56 overflow-hidden rounded-lg border border-adam-neutral-700 bg-adam-neutral-950" />
@@ -153,7 +134,7 @@ export function ShareContent({
         </div>
       </div>
 
-      {readyToDownload && (meshId || openscadCode) ? (
+      {readyToDownload && openscadCode ? (
         <Button
           onClick={() => downloadGifRef.current?.downloadGIF()}
           disabled={isGenerating}

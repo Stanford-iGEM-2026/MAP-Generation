@@ -1,8 +1,4 @@
-import type {
-  AppUIMessage,
-  MeshContextData,
-  MeshPreferencesData,
-} from './chatAi.ts';
+import type { AppUIMessage, MeshContextData } from './chatAi.ts';
 import type { ParametricArtifact } from './types.ts';
 
 /**
@@ -41,17 +37,6 @@ export function getMeshContextPart(
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const part = list[index];
     if (part.type === 'data-mesh-context') return part.data;
-  }
-  return undefined;
-}
-
-export function getMeshPreferencesPart(
-  parts: unknown,
-): MeshPreferencesData | undefined {
-  const list = asParametricParts(parts);
-  for (let index = list.length - 1; index >= 0; index -= 1) {
-    const part = list[index];
-    if (part.type === 'data-mesh-preferences') return part.data;
   }
   return undefined;
 }

@@ -6,7 +6,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Check } from 'lucide-react';
 import FreeTrialButton from '@/components/ui/FreeTrialButton';
@@ -23,7 +22,6 @@ export function TrialDialog({
   children?: React.ReactNode;
 }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const { data: products = [] } = useSubscriptionProducts();
   const { mutate: createCheckoutSession, isPending } = useSubscriptionService();
@@ -41,10 +39,7 @@ export function TrialDialog({
   const proCredits = proMonthly?.tokenAmount;
 
   const handleSubscribe = () => {
-    if (!user) {
-      navigate({ to: '/signin' });
-      return;
-    }
+    if (!user) return;
     if (!proMonthly) return;
     createCheckoutSession({
       priceId: proMonthly.stripePriceId,
@@ -64,7 +59,7 @@ export function TrialDialog({
       >
         <DialogHeader className="w-full">
           <DialogTitle className="text-center text-xl text-adam-text-primary md:text-2xl">
-            Here's 7 days of <span className="text-adam-blue">Adam Pro</span>
+            Here's 7 days of <span className="text-adam-blue">Kele Pro</span>
           </DialogTitle>
         </DialogHeader>
         <DialogDescription className="w-full text-sm text-adam-neutral-100">

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { createAnthropicText } from '@/server/anthropic';
+import { createOpenAIText } from '@/server/openaiText';
 import {
   isRecord,
   isUnauthorizedError,
@@ -49,8 +49,8 @@ export const Route = createFileRoute('/api/title-generator')({
           const text = trimmedText || textFromParts(body.parts);
           if (!text) return json({ title: 'New Conversation' });
 
-          const title = await createAnthropicText({
-            model: 'claude-haiku-4-5-20251001',
+          const title = await createOpenAIText({
+            model: 'gpt-4o-mini',
             maxTokens: 100,
             system: TITLE_SYSTEM_PROMPT,
             content: text,

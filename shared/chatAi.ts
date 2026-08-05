@@ -2,20 +2,6 @@ import { tool, type InferUITools, type UIMessage } from 'ai';
 import { z } from 'zod';
 import type { MeshFileType, Model } from './types.ts';
 
-export const createMeshInputSchema = z.object({
-  text: z.string().optional(),
-  imageIds: z.array(z.string()).optional(),
-  meshId: z.string().optional(),
-  model: z.enum(['fast', 'quality', 'ultra']).optional(),
-  meshTopology: z.enum(['quads', 'polys']).optional(),
-  polygonCount: z.number().optional(),
-});
-
-export const createMeshOutputSchema = z.object({
-  id: z.string(),
-  fileType: z.enum(['glb', 'stl', 'obj', 'fbx']),
-});
-
 export const parametricArtifactSchema = z.object({
   title: z.string().min(1),
   version: z.string().default('v1'),
@@ -42,21 +28,15 @@ export const answerUserSchema = z.object({
 export const chatTools = {
   build_parametric_model: tool({
     description:
-      'Create or update the complete OpenSCAD CAD artifact. After the browser compiles it, inspect the returned multi-view preview sheet and call this tool again if the model needs another revision.',
+      'Create or update the complete OpenSCAD microneedle array patch artifact. After the browser compiles it, inspect the returned multi-view preview sheet and call this tool again if the model needs another revision.',
     inputSchema: parametricArtifactSchema,
     outputSchema: parametricCompileOutputSchema,
   }),
   answer_user: tool({
     description:
-      'Send the final user-facing chat message. Use this for normal non-CAD replies, and after a CAD build when the multi-view preview satisfies the user request.',
+      'Send the final user-facing chat message. Use this for normal non-patch replies (including redirecting out-of-scope requests), and after a build when the multi-view preview satisfies the user request.',
     inputSchema: answerUserSchema,
     outputSchema: answerUserSchema,
-  }),
-  create_mesh: tool({
-    description:
-      'Create a 3D mesh from text, images, or an existing mesh plus edit instructions.',
-    inputSchema: createMeshInputSchema,
-    outputSchema: createMeshOutputSchema,
   }),
 };
 
@@ -69,9 +49,22 @@ export type MeshContextData = {
   boundingBox?: { x: number; y: number; z: number };
 };
 
-export type MeshPreferencesData = {
-  topology: 'quads' | 'polys';
-  polygonCount: number;
+/**
+ * Emitted when the user traces an attached reference image into an exact
+ * patch-boundary outline (see `src/server/outlineTrace.ts`). `points` are
+ * already normalized (Y-up, bounding-box min corner at the origin) in the
+ * same millimeter-agnostic units as `width`/`height` — the model should use
+ * them directly as an OpenSCAD `polygon()` array rather than re-deriving or
+ * transforming them. `complex` flags traces too dense to embed as a literal
+ * point array; the model should fall back to importing `filename` instead.
+ */
+export type OutlineContextData = {
+  outlineId: string;
+  filename: string;
+  points: [number, number][];
+  width: number;
+  height: number;
+  complex: boolean;
 };
 
 /**
@@ -97,7 +90,7 @@ export type ConversationSuggestionsUpdate = {
 
 export type AppDataTypes = {
   'mesh-context': MeshContextData;
-  'mesh-preferences': MeshPreferencesData;
+  'outline-context': OutlineContextData;
   'title-update': ConversationTitleUpdate;
   'suggestions-update': ConversationSuggestionsUpdate;
 };
@@ -111,9 +104,13 @@ export const meshContextDataSchema = z.object({
     .optional(),
 });
 
-export const meshPreferencesDataSchema = z.object({
-  topology: z.enum(['quads', 'polys']),
-  polygonCount: z.number(),
+export const outlineContextDataSchema = z.object({
+  outlineId: z.string(),
+  filename: z.string(),
+  points: z.array(z.tuple([z.number(), z.number()])),
+  width: z.number(),
+  height: z.number(),
+  complex: z.boolean(),
 });
 
 export type AppUIMessage = UIMessage<

@@ -33,3 +33,5 @@ dist-ssr
 # other secret files
 .env.local
 .env.langfuse
+
+.local-data

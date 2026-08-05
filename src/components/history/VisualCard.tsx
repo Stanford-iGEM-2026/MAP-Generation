@@ -39,7 +39,6 @@ import {
   asParametricParts,
   getBuildParametricModelOutput,
 } from '@shared/parametricParts';
-import type { MeshFileType } from '@shared/types';
 
 interface VisualCardProps {
   conversation: HistoryConversation;
@@ -51,10 +50,7 @@ interface VisualCardProps {
   ) => void;
 }
 
-type VisualPreview =
-  | { type: 'artifact'; key: string; code: string }
-  | { type: 'mesh'; key: string; meshId: string; fileType: MeshFileType }
-  | null;
+type VisualPreview = { type: 'artifact'; key: string; code: string } | null;
 
 export function VisualCard({
   conversation,
@@ -103,15 +99,6 @@ export function VisualCard({
     enabled: !!preview,
     generateBlob: async () => {
       if (!preview) throw new Error('No preview');
-      if (preview.type === 'mesh') {
-        const { data: meshBlob, error } = await supabase.storage
-          .from('meshes')
-          .download(
-            `${conversation.user_id}/${conversation.id}/${preview.meshId}.${preview.fileType}`,
-          );
-        if (error || !meshBlob) throw error ?? new Error('Mesh blob missing');
-        return dataUrlToBlob(await generatePreview(meshBlob, preview.fileType));
-      }
       // Use the PREVIEW path (not EXPORT) so we get the OFF companion file
       // with per-face color() data alongside the STL — matches what the live
       // editor renders. Fall back to the gray-ish STL render only when OFF
@@ -128,7 +115,7 @@ export function VisualCard({
   return (
     <div
       ref={cardRef}
-      className="group relative overflow-hidden rounded-xl border-2 border-adam-neutral-700 bg-adam-background-2 transition-all duration-200 hover:border-adam-blue hover:shadow-[0_0_20px_rgba(0,166,255,0.3)]"
+      className="hover:shadow-[0_0_20px_rgba(126, 200, 255,0.3)] group relative overflow-hidden rounded-xl border-2 border-adam-neutral-700 bg-adam-background-2 transition-all duration-200 hover:border-adam-blue"
     >
       <Link to="/editor/$id" params={{ id: conversation.id }}>
         <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-adam-background-1 to-adam-background-2">
@@ -185,7 +172,7 @@ export function VisualCard({
                 <MoreVertical className="h-4 w-4 text-adam-neutral-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-[#191A1A]">
+            <DropdownMenuContent align="end" className="bg-[#101A2C]">
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -265,14 +252,6 @@ function findLatestVisualPreview(
   const messageParts = asParametricParts(parts);
   for (let index = messageParts.length - 1; index >= 0; index -= 1) {
     const part = messageParts[index];
-    if (part.type === 'tool-create_mesh' && part.state === 'output-available') {
-      return {
-        type: 'mesh',
-        key: part.output.id,
-        meshId: part.output.id,
-        fileType: part.output.fileType,
-      };
-    }
     if (part.type === 'tool-build_parametric_model') {
       const artifact = getBuildParametricModelOutput([part]);
       if (artifact?.code) {

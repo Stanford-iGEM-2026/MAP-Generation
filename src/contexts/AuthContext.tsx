@@ -1,5 +1,8 @@
 import { createContext, useContext } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import type { GuestSession, GuestUser } from '@shared/localGuest';
+
+export type Session = GuestSession;
+export type User = GuestUser;
 
 export type SubscriptionLevel = 'standard' | 'pro' | 'max';
 export type PlanLevel = SubscriptionLevel | 'free';

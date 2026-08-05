@@ -22,21 +22,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShareContent } from '@/components/ui/ShareContent';
 
 interface ChatTitleProps {
-  activeMeshId?: string | null;
   activeOpenscadCode?: string | null;
 }
 
-export function ChatTitle({
-  activeMeshId,
-  activeOpenscadCode,
-}: ChatTitleProps = {}) {
+export function ChatTitle({ activeOpenscadCode }: ChatTitleProps = {}) {
   const { conversation, updateConversation } = useConversation();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(conversation.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
-  const isParametric = conversation.type === 'parametric';
 
   // Keep local state in sync when switching conversations quickly
   useEffect(() => {
@@ -106,7 +101,7 @@ export function ChatTitle({
                   'h-8 w-full bg-transparent px-2 text-left text-[17px] font-medium leading-tight tracking-tight text-adam-neutral-10 selection:bg-adam-blue/50 selection:text-white',
                   'rounded-none border-x-0 border-b-2 border-t-0 border-adam-neutral-500',
                   'focus:border-adam-neutral-500 focus:outline-none focus:ring-0',
-                  isParametric && isMobile && 'text-center',
+                  isMobile && 'text-center',
                 )}
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
@@ -128,7 +123,7 @@ export function ChatTitle({
             key="display-title"
             className={cn(
               'h-8 w-full',
-              isParametric && isMobile && 'flex items-center justify-center',
+              isMobile && 'flex items-center justify-center',
             )}
             {...animationProps}
           >
@@ -153,7 +148,7 @@ export function ChatTitle({
                           <span
                             className={cn(
                               'line-clamp-1 select-text',
-                              isParametric && 'text-center',
+                              'text-center',
                             )}
                           >
                             {conversation.title || 'Chat'}
@@ -191,7 +186,6 @@ export function ChatTitle({
                         conversationId={conversation.id}
                         privacy={conversation.privacy}
                         onPrivacyChange={handlePrivacyChange}
-                        meshId={activeMeshId ?? undefined}
                         openscadCode={activeOpenscadCode ?? undefined}
                       />
                     </DialogContent>
@@ -202,7 +196,7 @@ export function ChatTitle({
                     <span
                       className={cn(
                         'line-clamp-1 cursor-pointer px-2 text-left text-[17px]',
-                        isParametric && 'text-center',
+                        'text-center',
                       )}
                       onClick={() => setIsEditingTitle(true)}
                     >
@@ -217,7 +211,7 @@ export function ChatTitle({
                 <span
                   className={cn(
                     'line-clamp-1 px-2 text-left text-[17px]',
-                    isParametric && 'text-center',
+                    'text-center',
                   )}
                 >
                   {conversation.title || 'Chat'}

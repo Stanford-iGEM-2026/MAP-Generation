@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/popover';
 import { ShareContent } from '@/components/ui/ShareContent';
 import { OpenSCADPreview } from '@/components/viewer/OpenSCADViewer';
-import { MeshPreview } from '@/components/viewer/MeshPreview';
 import Loader from '@/components/viewer/Loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationContext } from '@/contexts/ConversationContext';
@@ -164,10 +163,11 @@ export default function EditorView() {
   );
 }
 
-type ActivePreview =
-  | { type: 'artifact'; messageId: string; artifact: ParametricArtifact }
-  | { type: 'mesh'; messageId: string; meshId: string }
-  | null;
+type ActivePreview = {
+  type: 'artifact';
+  messageId: string;
+  artifact: ParametricArtifact;
+} | null;
 
 /**
  * Owns the DB/tree layer for the editor: builds the tree from
@@ -192,9 +192,7 @@ function ConversationEditor() {
   const [model, setModel] = useState<Model>(
     conversation.settings?.model
       ? normalizeModelId(conversation.settings.model)
-      : conversation.type === 'creative'
-        ? 'quality'
-        : 'openai/gpt-5.6-sol',
+      : 'openai/gpt-4o',
   );
   const [activePreview, setActivePreview] = useState<ActivePreview>(null);
   const [parameters, setParameters] = useState<Parameter[]>([]);
@@ -451,12 +449,6 @@ function ConversationEditor() {
     },
     [conversation.id, queryClient],
   );
-  const handleViewMesh = useCallback((meshId: string, messageId: string) => {
-    setCurrentOutput(undefined);
-    setDxfExporter(() => null);
-    setActivePreview({ type: 'mesh', messageId, meshId });
-    setMobilePreviewVersion((version) => version + 1);
-  }, []);
 
   // Serialize parameter writes (see `drainParameterWrites`): one queued
   // snapshot per message id, plus a flag so at most one persist is ever in
@@ -624,11 +616,7 @@ function ConversationEditor() {
     <ConversationView
       hasParameters={hasArtifact}
       mobilePreviewKey={
-        activePreview
-          ? activePreview.type === 'artifact'
-            ? `artifact:${activePreview.messageId}`
-            : `mesh:${activePreview.messageId}:${activePreview.meshId}`
-          : null
+        activePreview ? `artifact:${activePreview.messageId}` : null
       }
       mobilePreviewVersion={mobilePreviewVersion}
       chatPanelSlot={
@@ -640,11 +628,6 @@ function ConversationEditor() {
             <div className="flex min-w-0 flex-1 items-center space-x-2">
               <div className="min-w-0 flex-1">
                 <ChatTitle
-                  activeMeshId={
-                    sharePreview?.type === 'mesh'
-                      ? sharePreview.meshId
-                      : undefined
-                  }
                   activeOpenscadCode={
                     sharePreview?.type === 'artifact'
                       ? sharePreview.artifact.code
@@ -672,11 +655,6 @@ function ConversationEditor() {
                     conversationId={conversation.id}
                     privacy={conversation.privacy}
                     onPrivacyChange={updatePrivacy}
-                    meshId={
-                      sharePreview?.type === 'mesh'
-                        ? sharePreview.meshId
-                        : undefined
-                    }
                     openscadCode={
                       sharePreview?.type === 'artifact'
                         ? sharePreview.artifact.code
@@ -717,7 +695,6 @@ function ConversationEditor() {
             onToolOutput={handleToolOutput}
             onChangeRating={handleChangeRating}
             onViewArtifact={handleViewArtifact}
-            onViewMesh={handleViewMesh}
             onLoadingChange={setIsChatStreaming}
           />
         </>
@@ -729,12 +706,10 @@ function ConversationEditor() {
           ) : activePreview?.type === 'artifact' ? (
             <OpenSCADPreview
               scadCode={activePreview.artifact.code}
-              color="#00A6FF"
+              color="#7EC8FF"
               onOutputChange={setCurrentOutput}
               onDxfExportChange={handleDxfExporterChange}
             />
-          ) : activePreview?.type === 'mesh' ? (
-            <MeshPreview meshId={activePreview.meshId} />
           ) : (
             <div className="text-sm text-adam-text-secondary">
               Send a message to start creating
@@ -749,14 +724,12 @@ function ConversationEditor() {
           ) : activePreview?.type === 'artifact' ? (
             <OpenSCADPreview
               scadCode={activePreview.artifact.code}
-              color="#00A6FF"
+              color="#7EC8FF"
               onOutputChange={setCurrentOutput}
               onDxfExportChange={handleDxfExporterChange}
               isMobile={true}
-              backgroundColor="#212121"
+              backgroundColor="#17243A"
             />
-          ) : activePreview?.type === 'mesh' ? (
-            <MeshPreview meshId={activePreview.meshId} />
           ) : (
             <div className="text-sm text-adam-text-secondary">
               Send a message to start creating
@@ -827,10 +800,11 @@ function mergeParameterDefaults(
   );
 }
 
-type LatestPreview =
-  | { type: 'artifact'; messageId: string; artifact: ParametricArtifact }
-  | { type: 'mesh'; messageId: string; meshId: string }
-  | null;
+type LatestPreview = {
+  type: 'artifact';
+  messageId: string;
+  artifact: ParametricArtifact;
+} | null;
 
 function findLatestPreview(messages: AppUIMessage[]): LatestPreview {
   for (
@@ -854,16 +828,6 @@ function findLatestPreview(messages: AppUIMessage[]): LatestPreview {
           type: 'artifact',
           messageId: message.id,
           artifact: part.input,
-        };
-      }
-      if (
-        part.type === 'tool-create_mesh' &&
-        part.state === 'output-available'
-      ) {
-        return {
-          type: 'mesh',
-          messageId: message.id,
-          meshId: part.output.id,
         };
       }
     }

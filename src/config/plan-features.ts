@@ -11,7 +11,7 @@ type PlanCopy = {
 
 export const PLAN_FEATURES: Record<PlanLevel, PlanCopy> = {
   free: {
-    description: 'Get started with Adam',
+    description: 'Get started with Kele',
     features: ['All AI features', 'Community support'],
   },
   standard: {

@@ -1,7 +1,6 @@
 import { Database } from './database.ts';
 import type { AppUIMessage } from './chatAi.ts';
 export type Model = string;
-export type CreativeModel = 'quality' | 'fast' | 'ultra';
 
 export type Prompt = {
   text?: string;

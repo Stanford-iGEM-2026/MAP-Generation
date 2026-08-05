@@ -1,10 +1,7 @@
-import { useNavigate, Link } from '@tanstack/react-router';
-import { LogIn } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useNavigate } from '@tanstack/react-router';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, ssoProvider } from '@/lib/supabase';
-import { signInWithSsoProvider } from '@/lib/ssoAuth';
+import { supabase } from '@/lib/supabase';
 import TextAreaChat from '@/components/TextAreaChat';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
@@ -12,14 +9,12 @@ import { Model } from '@shared/types';
 import { MessageItem } from '../types/misc.ts';
 import { LimitReachedMessage } from '@/components/LimitReachedMessage';
 import { LowPromptsWarningMessage } from '@/components/LowPromptsWarningMessage';
-import { NewProductBanner } from '@/components/NewProductBanner';
 import { FreePlanTrialPill } from '@/components/FreePlanTrialPill';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
 import { SelectedItemsContext } from '@/contexts/SelectedItemsContext';
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
-import { useProfile } from '@/services/profileService';
 import { useLayoutContext } from '@/contexts/LayoutContext';
 import { apiUrl } from '@/services/api';
 import {
@@ -36,32 +31,10 @@ export function PromptView() {
   const { toast } = useToast();
   const { user, billing, isLoading } = useAuth();
   const totalTokens = billing?.tokens.total ?? 0;
-  const { data: profile, isLoading: isProfileLoading } = useProfile();
   const { isSidebarOpen } = useLayoutContext();
   const queryClient = useQueryClient();
 
-  const firstName = useMemo(() => {
-    // Wait until the profile query resolves for signed-in users so the
-    // greeting doesn't flash the email local-part before snapping to the
-    // real first name.
-    if (user && isProfileLoading) return '';
-    const source = profile?.full_name || user?.email?.split('@')[0] || '';
-    return source.trim().split(/\s+/)[0] || '';
-  }, [profile?.full_name, user, isProfileLoading]);
-
-  const [type, setType] = useState<'parametric' | 'creative'>('parametric');
-
-  const [model, setModel] = useState<Model>('openai/gpt-5.6-sol');
-
-  const handleTypeChange = (newType: 'parametric' | 'creative') => {
-    setType(newType);
-    // Reset model to the default for the new type
-    if (newType === 'creative') {
-      setModel('quality');
-    } else {
-      setModel('openai/gpt-5.6-sol');
-    }
-  };
+  const [model, setModel] = useState<Model>('openai/gpt-4o');
 
   const [isLoaded, setIsLoaded] = useState(false);
   const isMobile = useIsMobile();
@@ -91,34 +64,6 @@ export function PromptView() {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Helper function to get time-based greeting (memoized for performance)
-  const getTimeBasedGreeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) {
-      return 'Good morning';
-    } else if (hour < 18) {
-      return 'Good afternoon';
-    } else {
-      return 'Good evening';
-    }
-  }, []); // Empty dependency array means it only calculates once per page load
-
-  // In SSO mode the provider redirect IS the sign-in: the existing signed-out
-  // affordances below fire it directly instead of navigating to the native
-  // auth routes (which bounce back to root in this mode). Same UI, same
-  // pixels — only where the click goes changes.
-  const { mutate: signInWithSso } = useMutation({
-    mutationFn: () => signInWithSsoProvider('/'),
-    onError: (error) => {
-      toast({
-        title: 'Whoopsies',
-        description:
-          error instanceof Error ? error.message : 'Something went wrong',
-        variant: 'destructive',
-      });
-    },
-  });
-
   const { mutate: handleGenerate, isPending: isGenerating } = useMutation({
     mutationFn: async (parts: AppUIMessage['parts']) => {
       if (!user?.id) throw new Error('User must be authenticated');
@@ -136,7 +81,7 @@ export function PromptView() {
       ).length;
 
       posthog.capture('new_conversation', {
-        type: type,
+        type: 'parametric',
         model_name: model,
         text: text.trim().slice(0, 100),
         image_count: imageCount,
@@ -152,7 +97,7 @@ export function PromptView() {
             id: conversationId,
             user_id: user.id,
             title: 'New Conversation',
-            type: type,
+            type: 'parametric',
             settings: {
               model: model,
             },
@@ -187,9 +132,7 @@ export function PromptView() {
         generateId: () => crypto.randomUUID(),
         messages: [],
         transport: new DefaultChatTransport<AppUIMessage>({
-          api: apiUrl(
-            type === 'creative' ? 'creative-chat' : 'parametric-chat',
-          ),
+          api: apiUrl('parametric-chat'),
           headers: async (): Promise<Record<string, string>> => {
             const accessToken = (await supabase.auth.getSession()).data.session
               ?.access_token;
@@ -254,29 +197,6 @@ export function PromptView() {
             'rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)]',
         )}
       >
-        {!user && (
-          <div className="fixed right-4 top-4 z-10 flex flex-row gap-2">
-            <Button
-              variant="light"
-              onClick={() =>
-                ssoProvider ? signInWithSso() : navigate({ to: '/signup' })
-              }
-              className="w-auto"
-            >
-              Sign Up
-            </Button>
-            <Button
-              onClick={() =>
-                ssoProvider ? signInWithSso() : navigate({ to: '/signin' })
-              }
-              className="w-auto"
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign In
-            </Button>
-          </div>
-        )}
-
         <main className="relative flex h-full w-full flex-col items-center justify-center px-4 md:px-8">
           <div className="mx-auto flex max-w-3xl flex-col items-center justify-center">
             {/* The pill floats above the greeting (absolute, out of flow) so
@@ -293,8 +213,7 @@ export function PromptView() {
                   isLoaded ? 'opacity-100' : 'opacity-0',
                 )}
               >
-                {getTimeBasedGreeting}
-                {firstName ? `, ${firstName}` : ''}!
+                Generate your Microneedle Array Patch!
               </h1>
             </div>
           </div>
@@ -309,24 +228,12 @@ export function PromptView() {
                     id: draftConversationId,
                     user_id: user?.id ?? '',
                   }}
-                  onFocus={() => {
-                    if (!user) {
-                      if (ssoProvider) {
-                        signInWithSso();
-                        return;
-                      }
-                      navigate({ to: '/signin' });
-                      return;
-                    }
-                  }}
-                  placeholder="Start building with Adam..."
-                  type={type}
+                  placeholder="Start building with Kele..."
                   disabled={limitReached || isGenerating}
                   model={model}
                   setModel={setModel}
                   showPromptGenerator={true}
                   showFullLabels={true}
-                  onTypeChange={handleTypeChange}
                 />
               </SelectedItemsContext.Provider>
               <div className="relative">
@@ -346,45 +253,6 @@ export function PromptView() {
                   </div>
                 )}
               </div>
-              {!user && (
-                <p className="text-center text-sm text-gray-500">
-                  <Link
-                    to="/signin"
-                    onClick={(e) => {
-                      if (ssoProvider) {
-                        e.preventDefault();
-                        signInWithSso();
-                      }
-                    }}
-                    className="!text-adam-blue hover:!text-adam-blue/80"
-                  >
-                    Sign in
-                  </Link>{' '}
-                  or{' '}
-                  <Link
-                    to="/signup"
-                    onClick={(e) => {
-                      if (ssoProvider) {
-                        e.preventDefault();
-                        signInWithSso();
-                      }
-                    }}
-                    className="!text-adam-blue hover:!text-adam-blue/80"
-                  >
-                    create an account
-                  </Link>{' '}
-                  to start generating
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Float the banner in the gap between the (vertically centered)
-              composer and the bottom edge: a band over the lower third, with
-              the card centered inside it, instead of glued to bottom-0. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[55%] flex items-center justify-center px-4 md:px-8">
-            <div className="pointer-events-auto w-full max-w-2xl">
-              <NewProductBanner />
             </div>
           </div>
         </main>

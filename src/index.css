@@ -54,35 +54,35 @@
      * into `@theme` blocks, Tailwind v4 will emit these variables
      * automatically. At that point this whole block can be removed.
      */
-    --color-background: #d7d7d7;
-    --color-muted-foreground: #949494;
+    --color-background: #c5dbf2;
+    --color-muted-foreground: #9bb4d0;
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 218 47% 12%;
+    --foreground: 210 100% 96%;
+    --card: 218 43% 16%;
+    --card-foreground: 210 100% 96%;
+    --popover: 218 43% 16%;
+    --popover-foreground: 210 100% 96%;
+    --primary: 205 100% 75%;
+    --primary-foreground: 218 47% 12%;
+    --secondary: 217 42% 22%;
+    --secondary-foreground: 210 100% 96%;
+    --muted: 217 42% 22%;
+    --muted-foreground: 212 28% 70%;
+    --accent: 217 42% 22%;
+    --accent-foreground: 210 100% 96%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --border: 217 38% 28%;
+    --input: 217 38% 28%;
+    --ring: 205 100% 75%;
+    --chart-1: 205 100% 70%;
+    --chart-2: 195 80% 60%;
+    --chart-3: 220 70% 65%;
+    --chart-4: 190 75% 55%;
+    --chart-5: 230 65% 70%;
   }
 }
 
@@ -140,18 +140,18 @@ input::placeholder {
   backdrop-filter: blur(12px);
   background: linear-gradient(
     135deg,
-    rgba(26, 26, 26, 0.9) 0%,
-    rgba(26, 26, 26, 0.8) 100%
+    rgba(23, 36, 58, 0.92) 0%,
+    rgba(16, 26, 44, 0.85) 100%
   );
 }
 
 .text-shadow-glow {
-  text-shadow: 0 0 10px rgba(0, 166, 255, 0.3);
+  text-shadow: 0 0 12px rgba(126, 200, 255, 0.45);
 }
 
 .shadow-adam {
   box-shadow:
-    0px 2px 4px 0px rgba(0, 166, 255, 0.25),
+    0px 2px 4px 0px rgba(126, 200, 255, 0.3),
     0px 1px 2px 0px rgba(255, 255, 255, 0.15) inset,
     0px 1px 3px 0px rgba(255, 255, 255, 0.25) inset;
 }
@@ -296,7 +296,7 @@ input::placeholder {
   }
 
   .loader path {
-    stroke: #00a6ff;
+    stroke: #7ec8ff;
     stroke-width: 0.6px;
     animation:
       dashArray 6s ease-in-out infinite,
@@ -790,7 +790,7 @@ input::placeholder {
 
 .resize-handle {
   width: 4px;
-  background-color: #3b3b3b;
+  background-color: #2a4060;
   transition: background-color 150ms ease;
   position: relative;
 }
@@ -808,50 +808,50 @@ input::placeholder {
 
 .resize-handle:hover,
 .resize-handle[data-resize-handle-state='hover'] {
-  background-color: #5a5a5a;
+  background-color: #7ec8ff;
 }
 
 .resize-handle[data-resize-handle-state='drag'] {
-  background-color: #676767;
+  background-color: #5bb4f5;
 }
 .glow-layer-1 {
   background: conic-gradient(
     from 0deg,
-    #7cc8ff,
-    #7db4ff,
-    #3ea2ff,
-    #2ac4ff,
-    #7cc8ff
+    #b8e4ff,
+    #7ec8ff,
+    #a8dcff,
+    #6bb8ff,
+    #b8e4ff
   );
   animation: rotate-glow 12s linear infinite;
   filter: blur(60px);
-  opacity: 0.8;
+  opacity: 0.75;
   transform: scale(1);
 }
 
 .glow-layer-2 {
   background: conic-gradient(
     from 45deg,
-    #7cc8ff,
-    #7db4ff,
-    #3ea2ff,
-    #2ac4ff,
-    #7cc8ff
+    #b8e4ff,
+    #7ec8ff,
+    #a8dcff,
+    #6bb8ff,
+    #b8e4ff
   );
   animation: rotate-glow 10s linear infinite reverse;
   filter: blur(30px);
-  opacity: 0.6;
+  opacity: 0.55;
   transform: scale(1);
 }
 
 .blur-transition-layer {
   background: conic-gradient(
     from 90deg,
-    #7cc8ff,
-    #7db4ff,
-    #3ea2ff,
-    #2ac4ff,
-    #7cc8ff
+    #b8e4ff,
+    #7ec8ff,
+    #a8dcff,
+    #6bb8ff,
+    #b8e4ff
   );
   animation: rotate-glow 8s linear infinite;
   filter: blur(100px);
@@ -931,7 +931,7 @@ input::placeholder {
   font-size: 32px;
   font-weight: 300;
   font-family: 'Kumbh Sans', sans-serif;
-  color: #e5e5e5;
+  color: #eaf4ff;
   text-align: center;
   white-space: nowrap;
 }
@@ -940,7 +940,7 @@ input::placeholder {
   display: inline-block;
   width: 2px;
   height: 32px;
-  background-color: #e5e5e5;
+  background-color: #7ec8ff;
   margin-left: 2px;
   animation: blink 1s infinite;
 }

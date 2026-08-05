@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState, useContext, useRef } from 'react';
 import { ThreeScene } from '@/components/viewer/ThreeScene';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { BufferGeometry, Group } from 'three';
-import { CircleAlert, Loader2, Wrench } from 'lucide-react';
+import { CircleAlert, Wrench } from 'lucide-react';
+import Loader from '@/components/viewer/Loader';
 import {
   buildColoredGroupFromOff,
   disposeColoredGroup,
@@ -26,7 +27,7 @@ function extractImportFilenames(code: string): string[] {
   return filenames;
 }
 
-// Brand-fallback `color` arrives as a CSS hex string (e.g. "#00A6FF") since
+// Brand-fallback `color` arrives as a CSS hex string (e.g. "#7EC8FF") since
 // it's also handed to react-three-fiber's <meshStandardMaterial color>. The
 // OFF builder wants a packed 0xRRGGBB number, so coerce here.
 function parseHexColor(hex: string): number {
@@ -270,7 +271,7 @@ export function OpenSCADPreview({
         )}
         {isCompiling && (
           <div className="absolute inset-0 flex items-center justify-center bg-adam-neutral-700/30 backdrop-blur-sm">
-            <Loader2 className="h-8 w-8 animate-spin text-adam-text-primary/70" />
+            <Loader sizeClassName="h-20 w-20" />
           </div>
         )}
       </div>
@@ -300,8 +301,15 @@ function FixWithAIButton({
             Error Compiling Model
           </p>
           <p className="mt-1 text-xs text-adam-text-primary/60">
-            Adam encountered an error while compiling
+            Kele encountered an error while compiling
           </p>
+          {error?.message ? (
+            <p className="mt-2 max-w-sm whitespace-pre-wrap break-words text-[11px] text-red-300/90">
+              {error.message.length > 280
+                ? `${error.message.slice(0, 280)}…`
+                : error.message}
+            </p>
+          ) : null}
         </div>
       </div>
       {fixError && error && error.name === 'OpenSCADError' && (

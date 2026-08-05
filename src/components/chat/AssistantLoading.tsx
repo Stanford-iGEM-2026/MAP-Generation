@@ -5,10 +5,11 @@ export function AssistantLoading() {
   return (
     <div className="flex w-full p-1">
       <div className="mr-2 mt-1 hidden sm:block">
-        <Avatar className="h-9 w-9 border border-adam-neutral-700 bg-adam-neutral-950 p-1.5">
+        <Avatar className="h-9 w-9 border border-adam-neutral-700 bg-adam-neutral-950">
           <AvatarImage
-            src={`${import.meta.env.BASE_URL}/adam-logo.svg`}
-            alt="Adam"
+            src={`${import.meta.env.BASE_URL}/kele-logo.png`}
+            alt="Kele"
+            className="object-cover"
           />
         </Avatar>
       </div>

@@ -3,7 +3,6 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ParameterSection } from '@/components/parameter/ParameterSection';
 import { ParameterSheetContent } from '@/components/parameter/ParameterSheetContent';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MeshPreview } from '@/components/viewer/MeshPreview';
 import { OpenSCADPreview } from '@/components/viewer/OpenSCADViewer';
 import { ConversationContext } from '@/contexts/ConversationContext';
 import { messageRowToChatMessage } from '@/lib/aiMessages';
@@ -25,10 +24,11 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConversationView } from './ConversationView';
 
-type ActivePreview =
-  | { type: 'artifact'; messageId: string; artifact: ParametricArtifact }
-  | { type: 'mesh'; messageId: string; meshId: string }
-  | null;
+type ActivePreview = {
+  type: 'artifact';
+  messageId: string;
+  artifact: ParametricArtifact;
+} | null;
 
 /**
  * Read-only sibling of `EditorView`. Renders a public conversation tree
@@ -148,31 +148,18 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
   useEffect(() => {
     const latest = findLatestPreview(branch);
     if (!latest) return;
-    const key =
-      latest.type === 'artifact'
-        ? `artifact:${latest.messageId}:${latest.artifact.code.length}`
-        : `mesh:${latest.messageId}:${latest.meshId}`;
+    const key = `artifact:${latest.messageId}:${latest.artifact.code.length}`;
     if (lastAutoAppliedPreviewKeyRef.current === key) return;
     lastAutoAppliedPreviewKeyRef.current = key;
-    if (latest.type === 'artifact') {
-      baseCodeRef.current = latest.artifact.code;
-      setParameters(parseParameters(latest.artifact.code));
-      setCurrentOutput(undefined);
-      setActivePreview({
-        type: 'artifact',
-        messageId: latest.messageId,
-        artifact: latest.artifact,
-      });
-      setMobilePreviewVersion((version) => version + 1);
-    } else {
-      setCurrentOutput(undefined);
-      setActivePreview({
-        type: 'mesh',
-        messageId: latest.messageId,
-        meshId: latest.meshId,
-      });
-      setMobilePreviewVersion((version) => version + 1);
-    }
+    baseCodeRef.current = latest.artifact.code;
+    setParameters(parseParameters(latest.artifact.code));
+    setCurrentOutput(undefined);
+    setActivePreview({
+      type: 'artifact',
+      messageId: latest.messageId,
+      artifact: latest.artifact,
+    });
+    setMobilePreviewVersion((version) => version + 1);
   }, [branch]);
 
   const handleViewArtifact = useCallback(
@@ -185,11 +172,6 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
     },
     [],
   );
-  const handleViewMesh = useCallback((meshId: string, messageId: string) => {
-    setCurrentOutput(undefined);
-    setActivePreview({ type: 'mesh', messageId, meshId });
-    setMobilePreviewVersion((version) => version + 1);
-  }, []);
 
   const changeParameters = useCallback(
     (nextParameters: Parameter[]) => {
@@ -217,11 +199,7 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
     <ConversationView
       hasParameters={hasArtifact}
       mobilePreviewKey={
-        activePreview
-          ? activePreview.type === 'artifact'
-            ? `artifact:${activePreview.messageId}`
-            : `mesh:${activePreview.messageId}:${activePreview.meshId}`
-          : null
+        activePreview ? `artifact:${activePreview.messageId}` : null
       }
       mobilePreviewVersion={mobilePreviewVersion}
       chatPanelSlot={
@@ -229,11 +207,6 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
           <div className="flex w-full items-center justify-between bg-transparent p-3 md:pl-12">
             <div className="min-w-0 flex-1">
               <ChatTitle
-                activeMeshId={
-                  activePreview?.type === 'mesh'
-                    ? activePreview.meshId
-                    : undefined
-                }
                 activeOpenscadCode={
                   activePreview?.type === 'artifact'
                     ? activePreview.artifact.code
@@ -255,7 +228,6 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
                   onViewArtifact={(artifact) =>
                     handleViewArtifact(artifact, node.id)
                   }
-                  onViewMesh={(meshId) => handleViewMesh(meshId, node.id)}
                 />
               ))}
             </div>
@@ -267,11 +239,9 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
           {activePreview?.type === 'artifact' ? (
             <OpenSCADPreview
               scadCode={activePreview.artifact.code}
-              color="#00A6FF"
+              color="#7EC8FF"
               onOutputChange={setCurrentOutput}
             />
-          ) : activePreview?.type === 'mesh' ? (
-            <MeshPreview meshId={activePreview.meshId} />
           ) : (
             <div className="text-sm text-adam-text-secondary">
               Nothing to preview yet
@@ -284,13 +254,11 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
           {activePreview?.type === 'artifact' ? (
             <OpenSCADPreview
               scadCode={activePreview.artifact.code}
-              color="#00A6FF"
+              color="#7EC8FF"
               onOutputChange={setCurrentOutput}
               isMobile={true}
-              backgroundColor="#212121"
+              backgroundColor="#17243A"
             />
-          ) : activePreview?.type === 'mesh' ? (
-            <MeshPreview meshId={activePreview.meshId} />
           ) : (
             <div className="text-sm text-adam-text-secondary">
               Nothing to preview yet
@@ -330,10 +298,11 @@ function ConversationShare({ conversation, messages }: ConversationShareProps) {
   );
 }
 
-type LatestPreview =
-  | { type: 'artifact'; messageId: string; artifact: ParametricArtifact }
-  | { type: 'mesh'; messageId: string; meshId: string }
-  | null;
+type LatestPreview = {
+  type: 'artifact';
+  messageId: string;
+  artifact: ParametricArtifact;
+} | null;
 
 function findLatestPreview(
   messages: { id: string; parts: AppUIMessage['parts'] }[],
@@ -359,16 +328,6 @@ function findLatestPreview(
           type: 'artifact',
           messageId: message.id,
           artifact: part.input,
-        };
-      }
-      if (
-        part.type === 'tool-create_mesh' &&
-        part.state === 'output-available'
-      ) {
-        return {
-          type: 'mesh',
-          messageId: message.id,
-          meshId: part.output.id,
         };
       }
     }

@@ -3,7 +3,6 @@ import React, {
   useRef,
   KeyboardEvent,
   useEffect,
-  useMemo,
   useCallback,
 } from 'react';
 import {
@@ -15,23 +14,16 @@ import {
   CircleX,
   Wand2,
   Box,
-  X,
+  Spline,
 } from 'lucide-react';
 import {
   cn,
-  CREATIVE_MODELS,
   PARAMETRIC_MODELS,
   parametricModelSupportsVision,
 } from '@/lib/utils';
-import { CreativeModel, MeshFileType, Model } from '@shared/types';
+import { MeshFileType, Model } from '@shared/types';
 import type { AppUIMessage } from '@shared/chatAi';
 import { imageFilePartUrl } from '@shared/imageRefs';
-import {
-  shouldShowPolygonControls,
-  getModelDefaultPolygonCount,
-  getMaxPolygonCount,
-  isCreativeModel,
-} from '@/constants/meshConstants';
 import { MessageItem } from '../types/misc.ts';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -39,13 +31,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,8 +52,34 @@ import { z } from 'zod';
 
 const promptResponseSchema = z.object({ prompt: z.string().optional() });
 
+const outlineTracerResponseSchema = z.object({
+  outlineId: z.string(),
+  filename: z.string(),
+  points: z.array(z.tuple([z.number(), z.number()])),
+  width: z.number(),
+  height: z.number(),
+  complex: z.boolean(),
+  svg: z.string(),
+});
+
+type TracedOutlineState = {
+  outlineId: string;
+  filename: string;
+  points: [number, number][];
+  width: number;
+  height: number;
+  complex: boolean;
+  sourceImageId: string;
+};
+
+/** Detect prompts that want the attached image used as a patch/shape outline. */
+function wantsShapeFromImage(text: string): boolean {
+  return /\b(shape|outline|silhouette|patch|microneedle|mironeedle|based on (this|the)|get this|from this|custom[- ]?shape|trace)\b/i.test(
+    text,
+  );
+}
+
 interface TextAreaChatProps {
-  type: 'parametric' | 'creative';
   onSubmit: (parts: AppUIMessage['parts']) => void;
   onFocus?: () => void;
   isLoading?: boolean;
@@ -79,358 +90,11 @@ interface TextAreaChatProps {
   setModel: (model: Model) => void;
   showPromptGenerator?: boolean;
   showFullLabels?: boolean; // Controls whether to show full text labels on buttons
-  onTypeChange?: (type: 'parametric' | 'creative') => void;
   conversation: {
     id: string;
     user_id: string;
   };
 }
-
-// SVG Icon component for the quads/polys toggle
-const QuadsPolysSvg = ({ color = '#D7D7D7' }: { color?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-  >
-    <path
-      d="M8 2V14"
-      stroke={color}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M2 8H14"
-      stroke={color}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M12.6667 2H3.33333C2.59695 2 2 2.59695 2 3.33333V12.6667C2 13.403 2.59695 14 3.33333 14H12.6667C13.403 14 14 13.403 14 12.6667V3.33333C14 2.59695 13.403 2 12.6667 2Z"
-      stroke={color}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-// SVG Icon component for the polygon count toggle
-const PolygonCountSvg = ({ color = '#D7D7D7' }: { color?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-  >
-    <g clipPath="url(#clip0_17634_35890)">
-      <path
-        d="M1.66651 11.2524C1.58733 11.2062 1.51853 11.1441 1.46442 11.0701C1.41031 10.9961 1.37205 10.9117 1.35203 10.8222C1.33201 10.7328 1.33065 10.6401 1.34806 10.5501C1.36546 10.4601 1.40125 10.3746 1.45317 10.2991L7.45317 1.61908C7.51461 1.53106 7.5964 1.45917 7.69157 1.40954C7.78675 1.3599 7.8925 1.33398 7.99984 1.33398C8.10718 1.33398 8.21294 1.3599 8.30811 1.40954C8.40329 1.45917 8.48507 1.53106 8.54651 1.61908L14.5465 10.2924C14.5996 10.3682 14.6363 10.4542 14.6543 10.5449C14.6723 10.6356 14.6712 10.7291 14.6512 10.8194C14.6311 10.9097 14.5925 10.9948 14.5377 11.0693C14.483 11.1439 14.4133 11.2062 14.3332 11.2524L8.65984 14.4924C8.45874 14.607 8.23128 14.6672 7.99984 14.6672C7.7684 14.6672 7.54094 14.607 7.33984 14.4924L1.66651 11.2524Z"
-        stroke={color}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8 1.33398V14.6673"
-        stroke={color}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </g>
-    <defs>
-      <clipPath id="clip0_17634_35890">
-        <rect width="16" height="16" fill="white" />
-      </clipPath>
-    </defs>
-  </svg>
-);
-
-// Polygon Input State Machine
-type PolygonInputState = { type: 'idle' } | { type: 'editing'; value: string };
-
-// Polygon Button Component
-interface PolygonButtonProps {
-  polygonCount: number;
-  meshTopology: 'quads' | 'polys';
-  model: CreativeModel;
-  showFullLabels: boolean;
-  isLoading: boolean;
-  disabled: boolean;
-  onPolygonCountChange: (count: number) => void;
-  onReset: () => void;
-}
-
-// Quads Button Component
-interface QuadsButtonProps {
-  meshTopology: 'quads' | 'polys';
-  showFullLabels: boolean;
-  isLoading: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-}
-
-const QuadsButton = ({
-  meshTopology,
-  showFullLabels,
-  isLoading,
-  disabled,
-  onToggle,
-}: QuadsButtonProps) => {
-  const isQuadsEnabled = meshTopology === 'quads';
-
-  const buttonContent = (
-    <button
-      onClick={onToggle}
-      disabled={isLoading || disabled}
-      aria-pressed={isQuadsEnabled}
-      className={cn(
-        'flex h-8 items-center gap-2 rounded-full border px-2 text-sm transition-colors duration-200',
-        'hover:bg-adam-bg-secondary-dark focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-        'items-center justify-center',
-        isQuadsEnabled
-          ? 'border-transparent bg-adam-blue-dark/15 hover:bg-adam-blue-dark/20'
-          : 'border-[#2a2a2a] bg-transparent',
-        showFullLabels && 'pr-[8px]',
-      )}
-    >
-      <QuadsPolysSvg color={isQuadsEnabled ? '#00A6FF' : '#D7D7D7'} />
-      {showFullLabels && (
-        <span
-          className={cn(
-            'hidden text-xs text-adam-text-primary lg:inline',
-            isQuadsEnabled && 'text-[#00A6FF]',
-          )}
-        >
-          Quads
-        </span>
-      )}
-    </button>
-  );
-
-  // Component abstraction instead of nested ternaries
-  if (showFullLabels) {
-    return buttonContent;
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
-      <TooltipContent>
-        {isQuadsEnabled ? 'Quad topology enabled' : 'Enable quad topology'}
-      </TooltipContent>
-    </Tooltip>
-  );
-};
-
-const PolygonButton = ({
-  polygonCount,
-  meshTopology,
-  model,
-  showFullLabels,
-  isLoading,
-  disabled,
-  onPolygonCountChange,
-  onReset,
-}: PolygonButtonProps) => {
-  // Computed values - no useState needed
-  const maxPolygonCount = getMaxPolygonCount(model, meshTopology);
-  // Use model-specific default for determining if value is custom
-  const defaultPolygonCount = getModelDefaultPolygonCount(model, meshTopology);
-  const maxInputValue = Math.floor(maxPolygonCount / 1000);
-  const isCustom = polygonCount !== defaultPolygonCount;
-
-  // Only state needed - popover open/closed and input editing
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  const [isSliderDragging, setIsSliderDragging] = useState(false);
-  const [closeGuardUntil, setCloseGuardUntil] = useState<number>(0);
-  const [inputState, setInputState] = useState<PolygonInputState>({
-    type: 'idle',
-  });
-
-  const formatPolygonCount = (count: number) => {
-    return count >= 1000 ? `${Math.floor(count / 1000)}K` : count.toString();
-  };
-
-  const handleSliderChange = (value: number[]) => {
-    onPolygonCountChange(value[0]);
-  };
-
-  const handleInputStart = (e: React.FocusEvent<HTMLInputElement>) => {
-    setInputState({
-      type: 'editing',
-      value: Math.floor(polygonCount / 1000).toString(),
-    });
-    // Auto-select all text when focused
-    e.target.select();
-  };
-
-  const handleInputChange = (value: string) => {
-    if (inputState.type === 'editing') {
-      if (value === '' || (/^\d+$/.test(value) && parseInt(value, 10) >= 0)) {
-        setInputState({ type: 'editing', value });
-      }
-    }
-  };
-
-  const handleInputComplete = () => {
-    if (inputState.type === 'editing') {
-      const numValue = parseInt(inputState.value, 10);
-      if (!isNaN(numValue) && numValue >= 1 && numValue <= maxInputValue) {
-        onPolygonCountChange(numValue * 1000);
-      }
-      setInputState({ type: 'idle' });
-    }
-  };
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleInputComplete();
-      setIsPopoverOpen(false); // Close the popover
-    }
-  };
-
-  const buttonContent = (
-    <button
-      onClick={() => setIsPopoverOpen(true)}
-      disabled={isLoading || disabled}
-      className={cn(
-        'flex h-8 items-center gap-[6px] rounded-full border px-2 text-sm transition-colors duration-200',
-        'hover:bg-adam-bg-secondary-dark focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-        'items-center justify-center',
-        // When popover is open and value is at model-specific default or input is empty while editing,
-        // highlight with neutral-800 background
-        isPopoverOpen &&
-          (!isCustom ||
-            (inputState.type === 'editing' && inputState.value === ''))
-          ? 'border-transparent bg-adam-neutral-800 hover:bg-adam-neutral-700'
-          : isCustom
-            ? 'border-transparent bg-adam-blue-dark/15 hover:bg-adam-blue-dark/20'
-            : 'border-[#2a2a2a] bg-transparent',
-        isCustom && 'pr-[10px]',
-      )}
-    >
-      <PolygonCountSvg color={isCustom ? '#00A6FF' : '#D7D7D7'} />
-      {showFullLabels && (
-        <span
-          className={cn(
-            'hidden text-xs lg:inline',
-            isCustom ? 'text-[#00A6FF]' : 'text-adam-text-primary',
-          )}
-        >
-          {isCustom ? formatPolygonCount(polygonCount) : 'Polygons'}
-        </span>
-      )}
-      {isCustom && (
-        <span
-          className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center"
-          title={`Reset to default (${formatPolygonCount(defaultPolygonCount)})`}
-        >
-          <X
-            className="h-3.5 w-3.5 cursor-pointer text-[#00A6FF] transition-opacity hover:opacity-70"
-            onClick={(e) => {
-              e.stopPropagation();
-              onReset();
-            }}
-          />
-        </span>
-      )}
-    </button>
-  );
-
-  const popoverContent = (
-    <PopoverContent
-      align="start"
-      className="flex w-56 flex-col items-start gap-3 self-stretch rounded-full border-0 bg-adam-neutral-700 p-2 shadow-none"
-      onOpenAutoFocus={(e) => e.preventDefault()}
-      onInteractOutside={(e) => {
-        // Keep popover open if user is dragging or within post-drag guard window
-        if (isSliderDragging || Date.now() < closeGuardUntil) {
-          e.preventDefault();
-        }
-      }}
-    >
-      <div className="flex w-full flex-col gap-3">
-        <div
-          className="flex h-6 items-center gap-3"
-          data-polygon-popover-interactive
-        >
-          <Slider
-            value={[Math.max(1000, polygonCount)]}
-            defaultValue={[defaultPolygonCount]}
-            onValueChange={handleSliderChange}
-            onValueCommit={handleSliderChange}
-            max={maxPolygonCount}
-            min={1000}
-            step={1000}
-            hideDefaultMarker
-            variant="capsule"
-            className="flex-1"
-            onPointerDown={() => setIsSliderDragging(true)}
-            onPointerUp={() => {
-              setIsSliderDragging(false);
-              setCloseGuardUntil(Date.now() + 150);
-            }}
-          />
-          <div className="flex items-center gap-1 pr-2">
-            <Input
-              type="text"
-              value={
-                inputState.type === 'editing'
-                  ? inputState.value
-                  : Math.floor(polygonCount / 1000).toString()
-              }
-              onChange={(e) => handleInputChange(e.target.value)}
-              onFocus={(e) => handleInputStart(e)}
-              onBlur={handleInputComplete}
-              onKeyDown={handleInputKeyDown}
-              onClick={(e) => {
-                e.stopPropagation();
-                // Also select all text when clicking on the input
-                (e.target as HTMLInputElement).select();
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="h-6 w-12 rounded-md border border-adam-neutral-700 bg-adam-neutral-800 px-1 py-0 text-center text-xs text-adam-text-primary selection:bg-[#70B8FF7A] selection:text-white focus:ring-1 focus:ring-adam-blue/20"
-            />
-            <span className="text-xs">k</span>
-          </div>
-        </div>
-      </div>
-    </PopoverContent>
-  );
-
-  // Component abstraction instead of nested ternaries
-  if (showFullLabels) {
-    return (
-      <div className="flex items-center gap-1">
-        <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-          <PopoverTrigger asChild>{buttonContent}</PopoverTrigger>
-          {popoverContent}
-        </Popover>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-              <PopoverTrigger asChild>{buttonContent}</PopoverTrigger>
-              {popoverContent}
-            </Popover>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>Adjust poly count</TooltipContent>
-      </Tooltip>
-    </div>
-  );
-};
-
-const SUPPORTED_MESH_EXTENSIONS = ['.glb', '.stl', '.obj', '.fbx'] as const;
 
 const VALID_IMAGE_FORMATS = [
   'image/jpeg',
@@ -447,31 +111,21 @@ const getMeshFileType = (filename: string): MeshFileType => {
   return 'glb';
 };
 
-const isSupportedMeshFile = (
-  filename: string,
-  type: 'creative' | 'parametric',
-): boolean => {
-  const lowerFilename = filename.toLowerCase();
-  if (type === 'creative') {
-    return SUPPORTED_MESH_EXTENSIONS.some((ext) => lowerFilename.endsWith(ext));
-  }
-  // Parametric mode only supports STL (for OpenSCAD import)
-  return lowerFilename.endsWith('.stl');
-};
+// Parametric mode only supports STL (for OpenSCAD import).
+const isSupportedMeshFile = (filename: string): boolean =>
+  filename.toLowerCase().endsWith('.stl');
 
 function TextAreaChat({
   onSubmit,
   onFocus,
   isLoading = false,
-  placeholder = 'What can Adam help you build today?',
-  type,
+  placeholder = 'What can Kele help you build today?',
   stopGenerating,
   disabled = false,
   model,
   setModel,
   showPromptGenerator = false,
-  showFullLabels = false,
-  onTypeChange,
+  showFullLabels: _showFullLabels = false,
   conversation,
 }: TextAreaChatProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -490,11 +144,6 @@ function TextAreaChat({
   const { session } = useAuth();
   const { images, mesh, setImages, setMesh } = useItemSelection();
   const meshFiles = useMeshFiles();
-  const creativeModel =
-    type === 'creative' && isCreativeModel(model) ? model : null;
-  const showPolygonControls = creativeModel
-    ? shouldShowPolygonControls(creativeModel)
-    : false;
 
   // Parametric mode: bounding box and filename from STL parsing
   const [meshBoundingBox, setMeshBoundingBox] = useState<BoundingBox | null>(
@@ -502,138 +151,9 @@ function TextAreaChat({
   );
   const [meshFilename, setMeshFilename] = useState<string | null>(null);
 
-  // Quads vs Polys toggle state (only for ultra model)
-  const [meshTopology, setMeshTopology] = useState<'quads' | 'polys'>(() => {
-    // Default to 'polys' (quads disabled by default)
-    // Only use localStorage if it's explicitly set to 'quads'
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('adam-mesh-topology');
-      // Only return 'quads' if explicitly stored, otherwise default to 'polys'
-      return stored === 'quads' ? 'quads' : 'polys';
-    }
-    return 'polys';
-  });
-
-  // Polygon count state - single source of truth for user overrides
-  const [polygonOverrides, setPolygonOverrides] = useState<
-    Record<string, number>
-  >(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('adam-polygon-overrides');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          // Validate that it's an object with number values
-          if (typeof parsed === 'object' && parsed !== null) {
-            const isValid = Object.entries(parsed).every(
-              ([key, value]) =>
-                typeof key === 'string' && typeof value === 'number',
-            );
-            return isValid ? parsed : {};
-          }
-        }
-      } catch (error) {
-        console.warn(
-          'Failed to parse polygon overrides from localStorage, resetting:',
-          error,
-        );
-        localStorage.removeItem('adam-polygon-overrides');
-      }
-    }
-    return {};
-  });
-
-  // Set polygon count for current model+topology combination
-  const setPolygonCountForCurrentModel = useCallback(
-    (count: number) => {
-      if (!creativeModel) return;
-      const modelTopologyKey = `${creativeModel}-${meshTopology}`;
-      const defaultCount = getModelDefaultPolygonCount(
-        creativeModel,
-        meshTopology,
-      );
-
-      // If setting to default, remove the override instead of storing it
-      if (count === defaultCount) {
-        setPolygonOverrides((prev) => {
-          const { [modelTopologyKey]: _, ...rest } = prev;
-          return rest;
-        });
-      } else {
-        setPolygonOverrides((prev) => ({
-          ...prev,
-          [modelTopologyKey]: count,
-        }));
-      }
-    },
-    [creativeModel, meshTopology],
-  );
-
-  // Persist meshTopology changes to localStorage
-  const handleMeshTopologyChange = useCallback(
-    (newTopology: 'quads' | 'polys') => {
-      setMeshTopology(newTopology);
-      if (!creativeModel) return;
-
-      // Reset polygon count to the model-specific default for the new topology.
-      const modelTopologyKey = `${creativeModel}-${newTopology}`;
-      setPolygonOverrides((prev) => {
-        const { [modelTopologyKey]: _, ...rest } = prev;
-        return rest;
-      });
-    },
-    [creativeModel],
-  );
-
-  // Derived polygon count - no useState needed, calculated from model + topology + overrides
-  const polygonCount = useMemo(() => {
-    if (!creativeModel) return 0;
-    const modelTopologyKey = `${creativeModel}-${meshTopology}`;
-    const userOverride = polygonOverrides[modelTopologyKey];
-    return (
-      userOverride ?? getModelDefaultPolygonCount(creativeModel, meshTopology)
-    );
-  }, [creativeModel, meshTopology, polygonOverrides]);
-
-  // Persist polygon overrides to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        'adam-polygon-overrides',
-        JSON.stringify(polygonOverrides),
-      );
-    }
-  }, [polygonOverrides]);
-
-  // Persist mesh topology to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('adam-mesh-topology', meshTopology);
-    }
-  }, [meshTopology]);
-
-  // Reset polygon count to default for current model and topology
-  const resetPolygonCount = useCallback(() => {
-    if (!creativeModel) return;
-    const modelTopologyKey = `${creativeModel}-${meshTopology}`;
-    setPolygonOverrides((prev) => {
-      const { [modelTopologyKey]: _, ...rest } = prev;
-      return rest;
-    });
-  }, [creativeModel, meshTopology]);
-
-  // When model changes, clear any polygon overrides to use the new model's defaults
-  useEffect(() => {
-    if (!creativeModel) return;
-
-    // Clear all overrides when switching models to ensure we use the new model's defaults
-    setPolygonOverrides({});
-  }, [creativeModel]);
-
-  // Computed polygon values for server submission
-  const maxPolygonCount = creativeModel
-    ? getMaxPolygonCount(creativeModel, meshTopology)
-    : 0;
+  // Custom-shape microneedle patch boundary, traced from an attached image.
+  const [outline, setOutline] = useState<TracedOutlineState | null>(null);
+  const [tracingImageId, setTracingImageId] = useState<string | null>(null);
 
   // Refs for the two hot-zones
   const topDropZoneRef = useRef<HTMLDivElement>(null);
@@ -652,33 +172,20 @@ function TextAreaChat({
     },
   };
 
-  const memoizedModels = useMemo(() => {
-    if (type === 'creative') {
-      return CREATIVE_MODELS;
-    }
-    return PARAMETRIC_MODELS;
-  }, [type]);
+  const memoizedModels = PARAMETRIC_MODELS;
 
   // ------------------------------------------------------------
   // Placeholder – Typed-out Animation
-  // When the target placeholder (based on mode & image state)
-  // changes, we progressively reveal each character so it looks
-  // like it's being typed in real-time. This gives users a more
-  // delightful sense of state change without abrupt flashes.
+  // When the target placeholder changes, we progressively reveal
+  // each character so it looks like it's being typed in real-time.
+  // This gives users a more delightful sense of state change
+  // without abrupt flashes.
   // ------------------------------------------------------------
 
   // Helper to decide which placeholder we're targeting right now
   const computeTargetPlaceholder = useCallback(() => {
-    if (type === 'creative') {
-      if (images.length > 0) return 'Edit uploaded image...';
-      // Model-specific placeholders
-      if (model === 'quality') return 'Make a rough 3D asset...';
-      if (model === 'fast') return 'Make a textureless 3D asset...';
-      if (model === 'ultra') return 'Make a production ready 3D asset...';
-      return 'Speak anything into existence...';
-    }
     return placeholder;
-  }, [type, images.length, placeholder, model]);
+  }, [placeholder]);
 
   // The text currently shown in the placeholder (animates)
   const [placeholderAnim, setPlaceholderAnim] = useState('');
@@ -712,28 +219,13 @@ function TextAreaChat({
     }
 
     startCrossfade(target);
-  }, [
-    type,
-    images.length,
-    placeholder,
-    model,
-    computeTargetPlaceholder,
-    placeholderAnim,
-  ]);
-
-  useEffect(() => {
-    if (type === 'creative' && images.length > 1) {
-      if (model !== 'quality') {
-        setModel('quality');
-      }
-    }
-  }, [images, setModel, model, type]);
+  }, [placeholder, computeTargetPlaceholder, placeholderAnim]);
 
   const handleSubmit = async () => {
     const hasNoInput = images.length === 0 && !input?.trim() && !mesh;
     const hasUploadingImages = images.some((img) => img.isUploading);
 
-    if (hasNoInput || isLoading || hasUploadingImages) {
+    if (hasNoInput || isLoading || hasUploadingImages || tracingImageId) {
       return;
     }
     const text = input.trim();
@@ -757,30 +249,7 @@ function TextAreaChat({
       });
     }
 
-    const submittedMesh = mesh
-      ? { id: mesh.id, fileType: mesh.fileType || ('glb' as MeshFileType) }
-      : undefined;
-
-    if (creativeModel) {
-      if (submittedMesh) {
-        parts.push({
-          type: 'data-mesh-context',
-          data: {
-            meshId: submittedMesh.id,
-            fileType: submittedMesh.fileType,
-          },
-        });
-      }
-      if (showPolygonControls) {
-        parts.push({
-          type: 'data-mesh-preferences',
-          data: {
-            topology: meshTopology,
-            polygonCount: Math.min(polygonCount, maxPolygonCount),
-          },
-        });
-      }
-    } else if (type === 'parametric' && mesh) {
+    if (mesh) {
       parts.push({
         type: 'data-mesh-context',
         data: {
@@ -791,12 +260,47 @@ function TextAreaChat({
         },
       });
     }
+
+    // Raster images are not OpenSCAD-importable. If the user clearly wants
+    // this image as a patch/shape boundary and hasn't traced yet, auto-trace
+    // the first ready image so the model gets real outline points / SVG.
+    let activeOutline = outline;
+    if (!activeOutline && wantsShapeFromImage(text)) {
+      const sourceImage = images.find((img) => img.url && !img.isUploading);
+      if (sourceImage) {
+        activeOutline = await traceImageAsBoundary(sourceImage.id);
+        if (!activeOutline) {
+          toast({
+            title: 'Could not trace shape',
+            description:
+              'Click the curve icon on the image to trace it as a patch boundary, then send again.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
+
+    if (activeOutline) {
+      parts.push({
+        type: 'data-outline-context',
+        data: {
+          outlineId: activeOutline.outlineId,
+          filename: activeOutline.filename,
+          points: activeOutline.points,
+          width: activeOutline.width,
+          height: activeOutline.height,
+          complex: activeOutline.complex,
+        },
+      });
+    }
     onSubmit(parts);
     setInput('');
     setImages([]);
     setMesh(null);
     setMeshBoundingBox(null);
     setMeshFilename(null);
+    setOutline(null);
   };
 
   const { mutateAsync: uploadImageAsync } = useMutation({
@@ -893,6 +397,56 @@ function TextAreaChat({
     },
   });
 
+  // Opt-in via the image curve button, or auto-run on submit when the prompt
+  // clearly asks to use the image as a shape/patch boundary.
+  const traceImageAsBoundary = async (
+    imageId: string,
+  ): Promise<TracedOutlineState | null> => {
+    if (tracingImageId) return null;
+    setTracingImageId(imageId);
+    try {
+      const data = await apiJson(
+        'outline-tracer',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            imageId,
+          }),
+        },
+        outlineTracerResponseSchema,
+      );
+      meshFiles.setMeshFile(
+        data.filename,
+        new Blob([data.svg], { type: 'image/svg+xml' }),
+      );
+      const next: TracedOutlineState = {
+        outlineId: data.outlineId,
+        filename: data.filename,
+        points: data.points,
+        width: data.width,
+        height: data.height,
+        complex: data.complex,
+        sourceImageId: imageId,
+      };
+      setOutline(next);
+      return next;
+    } catch (error) {
+      console.error('Error tracing outline:', error);
+      toast({
+        title: 'Error',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to trace the image into a patch boundary',
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      setTracingImageId(null);
+    }
+  };
+
   const addItems = async (files: FileList) => {
     const newItems = Array.from(files);
     let hasSmallImages = false;
@@ -941,7 +495,7 @@ function TextAreaChat({
     );
 
     const validMeshes = newItems.map((file) => {
-      if (!isSupportedMeshFile(file.name, type)) {
+      if (!isSupportedMeshFile(file.name)) {
         return null;
       }
 
@@ -983,9 +537,7 @@ function TextAreaChat({
       toast({
         title: 'Invalid file format',
         description:
-          type === 'creative'
-            ? 'Some files were not added because they are not valid file formats. Must be jpeg, png, webp, glb, stl, or obj.'
-            : 'Some files were not added because they are not valid file formats. Must be jpeg, png, webp, or stl.',
+          'Some files were not added because they are not valid file formats. Must be jpeg, png, webp, or stl.',
       });
     }
 
@@ -994,8 +546,8 @@ function TextAreaChat({
       const fileType = getMeshFileType(file.name);
       setMesh({ id: tempId, isUploading: true, source: 'upload', fileType });
       try {
-        // For parametric mode STL files, extract bounding box and generate multi-angle renders
-        if (type === 'parametric' && fileType === 'stl') {
+        // Extract bounding box and generate multi-angle renders for STL imports
+        if (fileType === 'stl') {
           const { geometry, boundingBox } = await parseSTL(file);
           setMeshBoundingBox(boundingBox);
           setMeshFilename(file.name);
@@ -1168,6 +720,7 @@ function TextAreaChat({
       setImages((prevImages) =>
         prevImages.filter((img) => img.id !== image.id),
       );
+      setOutline((prev) => (prev?.sourceImageId === image.id ? null : prev));
     }
   };
 
@@ -1181,7 +734,7 @@ function TextAreaChat({
           method: 'POST',
           body: JSON.stringify({
             existingText: input.trim() || undefined,
-            type,
+            type: 'parametric',
           }),
         },
         promptResponseSchema,
@@ -1324,8 +877,8 @@ function TextAreaChat({
               ? 'h-0 border-transparent bg-transparent opacity-0'
               : isDragging
                 ? isDragHover
-                  ? 'h-20 border-[#00A6FF] bg-[rgba(0,166,255,0.24)] opacity-100' // Blue, full height
-                  : 'h-20 border-[#0077B7] bg-[rgba(0,166,255,0.12)] opacity-100' // Intermediate blue, full height
+                  ? 'bg-[rgba(126, 200, 255,0.24)] h-20 border-[#7EC8FF] opacity-100' // Blue, full height
+                  : 'bg-[rgba(126, 200, 255,0.12)] h-20 border-[#5BB4F5] opacity-100' // Intermediate blue, full height
                 : images.length > 0 || mesh !== null
                   ? 'h-20 border-adam-neutral-700 bg-adam-neutral-950 opacity-100'
                   : 'h-0 border-transparent bg-transparent opacity-0',
@@ -1364,13 +917,17 @@ function TextAreaChat({
                 <Images
                   className="h-5 w-5"
                   style={{
-                    color: isDragHover ? '#00A6FF' : 'rgba(0, 166, 255, 0.85)',
+                    color: isDragHover
+                      ? '#7EC8FF'
+                      : 'rgba(126, 200, 255, 0.85)',
                   }}
                 />
                 <p
                   className="text-sm font-normal"
                   style={{
-                    color: isDragHover ? '#00A6FF' : 'rgba(0, 166, 255, 0.85)',
+                    color: isDragHover
+                      ? '#7EC8FF'
+                      : 'rgba(126, 200, 255, 0.85)',
                   }}
                 >
                   Add more images here
@@ -1388,13 +945,17 @@ function TextAreaChat({
                 <Images
                   className="h-5 w-5"
                   style={{
-                    color: isDragHover ? '#00A6FF' : 'rgba(0, 166, 255, 0.85)',
+                    color: isDragHover
+                      ? '#7EC8FF'
+                      : 'rgba(126, 200, 255, 0.85)',
                   }}
                 />
                 <p
                   className="text-sm font-normal"
                   style={{
-                    color: isDragHover ? '#00A6FF' : 'rgba(0, 166, 255, 0.85)',
+                    color: isDragHover
+                      ? '#7EC8FF'
+                      : 'rgba(126, 200, 255, 0.85)',
                   }}
                 >
                   Drop images and 3D models here
@@ -1468,12 +1029,40 @@ function TextAreaChat({
                         <img
                           src={image.url}
                           alt="Image"
-                          className="h-12 w-12 rounded-md object-cover"
+                          className={cn(
+                            'h-12 w-12 rounded-md object-cover',
+                            outline?.sourceImageId === image.id &&
+                              'ring-2 ring-[#7EC8FF]',
+                          )}
                         />
-                        {image.isUploading && (
+                        {(image.isUploading || tracingImageId === image.id) && (
                           <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/50">
                             <Loader2 className="h-4 w-4 animate-spin text-white" />
                           </div>
+                        )}
+                        {!image.isUploading && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => traceImageAsBoundary(image.id)}
+                                disabled={tracingImageId !== null}
+                                className={cn(
+                                  'absolute bottom-[-0.50rem] left-[-0.50rem] rounded-full border text-white transition-colors duration-200',
+                                  outline?.sourceImageId === image.id
+                                    ? 'border-[#7EC8FF] bg-[#7EC8FF] hover:bg-[#5BB4F5]'
+                                    : 'border-adam-neutral-500 bg-adam-neutral-500 hover:border-adam-neutral-700 hover:bg-adam-neutral-700',
+                                  tracingImageId !== null && 'opacity-50',
+                                )}
+                              >
+                                <Spline className="h-4 w-4 stroke-[1.5]" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {outline?.sourceImageId === image.id
+                                ? 'Traced as patch boundary'
+                                : 'Trace as patch boundary'}
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                         <button
                           onClick={() => handleImageRemoved(image)}
@@ -1490,6 +1079,12 @@ function TextAreaChat({
                   </AnimatePresence>
                 </div>
               )
+            )}
+            {images.length > 0 && !outline && (
+              <p className="px-1 text-[11px] text-adam-neutral-400">
+                For a custom patch shape, click the curve icon on the image (or
+                just send — we&apos;ll auto-trace shape prompts).
+              </p>
             )}
           </>
         )}
@@ -1526,13 +1121,11 @@ function TextAreaChat({
       >
         <div className="flex select-none items-start justify-between p-2">
           <Avatar className="mt-1 h-8 w-8">
-            <div className="h-full w-full p-1.5">
-              <img
-                src={`${import.meta.env.BASE_URL}/Adam-Logo.png`}
-                alt="Adam Logo"
-                className="h-full w-full object-contain"
-              />
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}/kele-logo.png`}
+              alt="Kele"
+              className="h-full w-full object-cover"
+            />
           </Avatar>
           <div className="relative grid w-full">
             <Textarea
@@ -1593,8 +1186,7 @@ function TextAreaChat({
         </div>
         <div className="flex items-center justify-between border-t border-[#2a2a2a] p-3">
           <div className="flex items-center gap-1">
-            {(type !== 'parametric' ||
-              parametricModelSupportsVision(model)) && (
+            {parametricModelSupportsVision(model) && (
               <div
                 className={cn(
                   'transition-all duration-300 ease-out',
@@ -1608,11 +1200,7 @@ function TextAreaChat({
                     e.stopPropagation();
                     const input = document.createElement('input');
                     input.type = 'file';
-                    input.accept = `${VALID_IMAGE_FORMATS.join(', ')}, ${
-                      type === 'creative'
-                        ? SUPPORTED_MESH_EXTENSIONS.join(', ')
-                        : '.stl'
-                    }`;
+                    input.accept = `${VALID_IMAGE_FORMATS.join(', ')}, .stl`;
                     input.onchange = () => handleItemsChange(input.files);
                     input.click();
                   }}
@@ -1622,66 +1210,6 @@ function TextAreaChat({
                 </Button>
               </div>
             )}
-
-            {/* Creative mode toggle button */}
-            {onTypeChange && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'flex h-8 items-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-adam-background-2 px-2 text-sm transition-colors',
-                      type === 'creative'
-                        ? 'border-adam-blue/50 bg-adam-blue/10 text-adam-blue'
-                        : 'text-adam-text-secondary hover:bg-adam-bg-secondary-dark',
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTypeChange(
-                        type === 'parametric' ? 'creative' : 'parametric',
-                      );
-                    }}
-                  >
-                    <Box className="h-4 w-4" />
-                    <span className="hidden text-xs lg:inline">Mesh</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {type === 'parametric'
-                    ? 'Switch to Creative mode'
-                    : 'Switch to Parametric mode'}
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* Quads vs Polys toggle button - show for standard and ultra models */}
-            {showPolygonControls && (
-              <QuadsButton
-                meshTopology={meshTopology}
-                showFullLabels={showFullLabels}
-                isLoading={isLoading}
-                disabled={disabled}
-                onToggle={() =>
-                  handleMeshTopologyChange(
-                    meshTopology === 'quads' ? 'polys' : 'quads',
-                  )
-                }
-              />
-            )}
-
-            {/* Polygon Count button - show for standard and ultra models */}
-            {creativeModel && showPolygonControls && (
-              <PolygonButton
-                polygonCount={polygonCount}
-                meshTopology={meshTopology}
-                model={creativeModel}
-                showFullLabels={showFullLabels}
-                isLoading={isLoading}
-                disabled={disabled || false}
-                onPolygonCountChange={setPolygonCountForCurrentModel}
-                onReset={resetPolygonCount}
-              />
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -1690,7 +1218,6 @@ function TextAreaChat({
               models={memoizedModels}
               selectedModel={model}
               onModelChange={setModel}
-              type={type}
               focused={isFocused}
             />
             {/* Enhanced submit button */}

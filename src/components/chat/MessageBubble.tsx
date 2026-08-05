@@ -1,4 +1,3 @@
-import { MeshImagePreview } from '@/components/viewer/MeshImagePreview';
 import { StreamingCodeBlock } from '@/components/chat/StreamingCodeBlock';
 import { ChatReasoning } from '@/components/chat/ChatReasoning';
 import { UserAvatar } from '@/components/chat/UserAvatar';
@@ -9,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { CREATIVE_MODELS, PARAMETRIC_MODELS } from '@/lib/utils';
+import { PARAMETRIC_MODELS } from '@/lib/utils';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,7 +22,6 @@ import {
 import { cn } from '@/lib/utils';
 import { usePreview } from '@/hooks/usePreview';
 import { useImageData } from '@/hooks/useImageData';
-import { useMeshData } from '@/hooks/useMeshData';
 import { generatePreview, generateColoredPreview } from '@/utils/meshUtils';
 import { previewScadColoredViaToolWorker } from '@/worker/toolWorker';
 import type { ChatMessage } from '@/lib/aiMessages';
@@ -65,7 +63,6 @@ type MessageBubbleProps = {
   onSelectLeaf?: (messageId: string) => void;
   onEditUserText?: (message: ChatMessage, text: string) => void;
   onViewArtifact?: (artifact: ParametricArtifact) => void;
-  onViewMesh?: (meshId: string) => void;
   onChangeRating?: (rating: number) => void;
   onRetry?: (model: Model) => void;
   onRestore?: () => void;
@@ -181,19 +178,6 @@ function UserBubble({
       ),
     [message.parts],
   );
-  const meshPreferencesParts = useMemo(
-    () =>
-      message.parts.filter(
-        (
-          p,
-        ): p is Extract<
-          (typeof message.parts)[number],
-          { type: 'data-mesh-preferences' }
-        > => p.type === 'data-mesh-preferences',
-      ),
-    [message.parts],
-  );
-
   const branchIndex = message.siblings.findIndex((b) => b.id === message.id);
   const leafNodes = useMemo(
     () =>
@@ -281,16 +265,6 @@ function UserBubble({
             ))}
           </div>
         ) : null}
-
-        {meshPreferencesParts.map((part, index) => (
-          <span
-            key={`pref-${index}`}
-            className="w-fit rounded-full bg-adam-neutral-800 px-2 py-1 text-xs text-adam-text-secondary"
-          >
-            {part.data.topology} · {part.data.polygonCount.toLocaleString()}{' '}
-            polys
-          </span>
-        ))}
 
         {hasBubble && (
           <div
@@ -425,27 +399,23 @@ function AssistantBubble({
   currentModel,
   onSelectLeaf,
   onViewArtifact,
-  onViewMesh,
   onChangeRating,
   onRetry,
   onRestore,
 }: MessageBubbleProps) {
-  const { conversation } = useConversation();
-  const modelOptions =
-    conversation.type === 'creative' ? CREATIVE_MODELS : PARAMETRIC_MODELS;
+  const modelOptions = PARAMETRIC_MODELS;
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const lastParametricBuildIndex = useMemo(() => {
-    if (conversation.type !== 'parametric') return -1;
     let buildIndex = -1;
     message.parts.forEach((part, index) => {
       if (part.type === 'tool-build_parametric_model') buildIndex = index;
     });
     return buildIndex;
-  }, [conversation.type, message.parts]);
+  }, [message.parts]);
 
   const text = useMemo(
     () =>
-      conversation.type === 'parametric' && lastParametricBuildIndex !== -1
+      lastParametricBuildIndex !== -1
         ? ''
         : message.parts
             .filter(
@@ -459,7 +429,7 @@ function AssistantBubble({
             .map((p) => cleanAssistantText(p.text))
             .filter((visibleText) => !!visibleText)
             .join(''),
-    [conversation.type, message.parts, lastParametricBuildIndex],
+    [message.parts, lastParametricBuildIndex],
   );
   const answerText = useMemo(
     () => message.parts.map(answerUserMessageText).filter(Boolean).join(''),
@@ -494,21 +464,17 @@ function AssistantBubble({
     <div className="flex min-w-0 max-w-full justify-start overflow-hidden">
       <div className="mr-2 mt-1 shrink-0">
         <Avatar className="h-9 w-9 border border-adam-neutral-700 bg-adam-neutral-950">
-          <div style={{ padding: '0.6rem 0.5rem 0.5rem 0.55rem' }}>
-            <AvatarImage
-              src={`${import.meta.env.BASE_URL}/adam-logo.svg`}
-              alt="Adam"
-            />
-          </div>
+          <AvatarImage
+            src={`${import.meta.env.BASE_URL}/kele-logo.png`}
+            alt="Kele"
+            className="object-cover"
+          />
         </Avatar>
       </div>
       <div className="flex min-w-0 max-w-[calc(100%-3rem)] flex-1 flex-col gap-2">
         {message.parts.map((part, index) => {
           if (part.type === 'text') {
-            if (
-              conversation.type === 'parametric' &&
-              lastParametricBuildIndex !== -1
-            ) {
+            if (lastParametricBuildIndex !== -1) {
               return null;
             }
             const visibleText = cleanAssistantText(part.text);
@@ -633,22 +599,6 @@ function AssistantBubble({
               >
                 <Streamdown parseIncompleteMarkdown>{answerMessage}</Streamdown>
               </div>
-            );
-          }
-
-          if (part.type === 'tool-create_mesh') {
-            const output =
-              part.state === 'output-available' ? part.output : undefined;
-            const meshId = output?.id;
-            return (
-              <MeshToolBlock
-                key={index}
-                state={part.state}
-                meshId={meshId}
-                expanded={expandedTools.has(index)}
-                onToggle={() => toggleTool(index)}
-                onViewMesh={onViewMesh}
-              />
             );
           }
 
@@ -991,87 +941,6 @@ function ToolBlock({
   );
 }
 
-// Full AI SDK v6 tool-state union. The `approval-*` and `output-denied`
-// states only fire when a tool opts into approval gating via
-// `needsApproval` — our tools don't, so those branches are
-// type-system-only. Still listed here so the prop type stays a
-// superset of `ToolUIPart['state']` and we don't lose type safety the
-// next time the SDK widens the union.
-type ToolPartState =
-  | 'input-streaming'
-  | 'input-available'
-  | 'approval-requested'
-  | 'approval-responded'
-  | 'output-available'
-  | 'output-error'
-  | 'output-denied';
-
-function MeshToolBlock({
-  state,
-  meshId,
-  expanded,
-  onToggle,
-  onViewMesh,
-}: {
-  state: ToolPartState;
-  meshId: string | undefined;
-  expanded: boolean;
-  onToggle: () => void;
-  onViewMesh?: (meshId: string) => void;
-}) {
-  const {
-    data: { data: meshData },
-    blob: { data: meshBlob },
-  } = useMeshData({ id: meshId ?? '' });
-
-  const meshStatus = meshData?.status;
-  const isAwaitingMesh =
-    state === 'output-available' &&
-    !!meshId &&
-    meshStatus !== 'success' &&
-    meshStatus !== 'failure';
-  const showPreview =
-    state === 'output-available' &&
-    !!meshId &&
-    ((meshStatus === 'success' && !!meshBlob) || meshStatus === 'failure');
-
-  const isError = state === 'output-error' || state === 'output-denied';
-  const isPending =
-    state === 'input-streaming' ||
-    state === 'input-available' ||
-    state === 'approval-requested' ||
-    state === 'approval-responded';
-
-  const title =
-    isError || meshStatus === 'failure'
-      ? 'Mesh generation failed'
-      : meshStatus === 'success'
-        ? '3D Object'
-        : 'Generating mesh...';
-
-  return (
-    <ToolBlock
-      icon={<Box className="h-4 w-4" />}
-      title={title}
-      loading={isPending || isAwaitingMesh}
-      expanded={expanded}
-      onToggle={onToggle}
-      onPrimary={meshId ? () => onViewMesh?.(meshId) : undefined}
-      previewBody={
-        showPreview && meshId ? (
-          <button
-            type="button"
-            className="block w-full p-2"
-            onClick={() => onViewMesh?.(meshId)}
-          >
-            <MeshImagePreview meshId={meshId} />
-          </button>
-        ) : null
-      }
-    />
-  );
-}
-
 function ParametricImagePreview({
   toolCallId,
   code,
@@ -1143,8 +1012,8 @@ function MeshContextChip({
   const label = filename ?? `mesh ${meshId.slice(0, 6)}`;
   return (
     <div className="flex items-center gap-2 overflow-hidden rounded-lg border border-adam-neutral-700 bg-adam-neutral-900 p-1.5">
-      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md">
-        <MeshImagePreview meshId={meshId} />
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-adam-neutral-950">
+        <Box className="h-5 w-5 text-adam-text-secondary" />
       </div>
       <div className="flex min-w-0 flex-col">
         <span className="truncate text-xs font-medium text-adam-text-primary">

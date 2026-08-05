@@ -160,7 +160,7 @@ export function ParameterSection({
         description:
           error instanceof Error
             ? error.message
-            : 'Adam could not export this model as DXF.',
+            : 'Kele could not export this model as DXF.',
         variant: 'destructive',
       });
     } finally {

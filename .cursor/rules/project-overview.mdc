@@ -3,10 +3,10 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Adam - AI-Powered 3D CAD Model Generation Platform
+# Adam - AI-Powered Microneedle Array Patch Design Platform
 
 ## Project Overview
-Adam is a web application that enables users to generate 3D CAD models through AI-powered natural language, images, and direct manipulation. The platform combines parametric modeling with creative AI generation.
+Adam is a web application that enables users to design and generate microneedle array patches through AI-powered natural language, images, and direct manipulation using parametric modeling.
 
 ## Tech Stack
 - **Frontend**: React 19 + TypeScript + Vite

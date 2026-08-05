@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Menu, Plus, LogOut, Crown, Settings, LayoutGrid } from 'lucide-react';
+import {
+  Menu,
+  Plus,
+  LogOut,
+  Crown,
+  Settings,
+  LayoutGrid,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -15,8 +23,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, ssoProvider } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { BILLING_URL } from '@/config/billing';
 import {
   Sheet,
@@ -29,11 +48,11 @@ import {
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useQuery } from '@tanstack/react-query';
 import { ConditionalWrapper } from './ConditionalWrapper';
-import { DiscordIcon, GitHubIcon } from './icons/CompanyIcons';
 import { cn } from '@/lib/utils';
-import { Conversation, ConversationSettings } from '@shared/types';
+import { Conversation } from '@shared/types';
 import { UserAvatar } from '@/components/chat/UserAvatar';
 import { useProfile } from '@/services/profileService';
+import { useDeleteConversation } from '@/hooks/useDeleteConversation';
 
 interface SidebarProps {
   isSidebarOpen: boolean;
@@ -44,9 +63,10 @@ type SidebarPath = '/' | '/history';
 
 function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const { data: profile } = useProfile();
+  const deleteConversation = useDeleteConversation();
 
   // Get 10 most recent conversations
   const { data: recentConversations } = useQuery<Conversation[]>({
@@ -59,7 +79,7 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
         .order('updated_at', { ascending: false })
         .eq('user_id', user?.id ?? '')
         .limit(10)
-        .overrideTypes<Array<{ settings: ConversationSettings }>>();
+        .overrideTypes<Conversation[]>();
 
       if (error) throw error;
 
@@ -68,21 +88,7 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
   });
 
   const handleSignOut = async () => {
-    try {
-      if (ssoProvider) {
-        // In SSO mode root is the app's only auth surface, so sign-out lands
-        // there. Navigate BEFORE the session dies: on a guarded route the
-        // AuthGuard would otherwise fire the provider redirect the moment the
-        // session goes away and sign the user straight back in.
-        await navigate({ to: '/' });
-        await signOut();
-        return;
-      }
-      await signOut();
-      navigate({ to: '/signin' });
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    // Local guest mode — nothing to sign out of.
   };
 
   const sidebarNavigate = (path: SidebarPath) => {
@@ -142,18 +148,21 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
             onClick={() => sidebarNavigate('/')}
           >
             {isSidebarOpen ? (
-              <div className="flex w-full">
+              <div className="flex w-full items-center gap-2 px-1">
                 <img
-                  className="mx-auto h-8 w-full"
-                  src={`${import.meta.env.BASE_URL}/cadam-logo.svg`}
-                  alt="Logo"
+                  className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  src={`${import.meta.env.BASE_URL}/kele-logo.png`}
+                  alt="Kele"
                 />
+                <span className="text-lg font-semibold tracking-tight text-adam-text-primary">
+                  Kele
+                </span>
               </div>
             ) : (
               <img
-                src={`${import.meta.env.BASE_URL}/adam-logo.svg`}
-                alt="Logo"
-                className="h-8 w-8 min-w-8"
+                src={`${import.meta.env.BASE_URL}/kele-logo-icon.png`}
+                alt="Kele"
+                className="h-8 w-8 min-w-8 rounded-full object-cover"
               />
             )}
           </button>
@@ -183,8 +192,8 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
                 variant="secondary"
                 className={` ${
                   isSidebarOpen
-                    ? 'flex w-[216px] items-center justify-start gap-2 rounded-[100px] border border-adam-blue bg-adam-background-1 px-4 py-3 text-[#D7D7D7] hover:bg-adam-blue/40 hover:text-adam-text-primary'
-                    : 'flex h-[30px] w-[30px] items-center justify-center rounded-[8px] border-2 border-adam-blue bg-[#191A1A] p-[2px] text-[#D7D7D7] shadow-[0px_4px_10px_0px_rgba(0,166,255,0.24)] hover:bg-adam-blue/40 hover:text-adam-text-primary'
+                    ? 'flex w-[216px] items-center justify-start gap-2 rounded-[100px] border border-adam-blue bg-adam-background-1 px-4 py-3 text-adam-neutral-100 hover:bg-adam-blue/40 hover:text-adam-text-primary'
+                    : 'flex h-[30px] w-[30px] items-center justify-center rounded-[8px] border-2 border-adam-blue bg-adam-background-2 p-[2px] text-adam-neutral-100 shadow-[0px_4px_10px_0px_rgba(126,200,255,0.28)] hover:bg-adam-blue/40 hover:text-adam-text-primary'
                 } mb-4`}
                 onClick={() => sidebarNavigate('/')}
               >
@@ -247,22 +256,60 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
                         >,
                       ) => {
                         return (
-                          <Link
-                            to="/editor/$id"
-                            params={{ id: conversation.id }}
+                          <li
                             key={conversation.id}
-                            onClick={() => {
-                              if (isMobile) {
-                                setIsSidebarOpen(false);
-                              }
-                            }}
+                            className="group/item flex items-center gap-0.5"
                           >
-                            <li key={conversation.id}>
-                              <span className="line-clamp-1 text-ellipsis text-nowrap rounded-md p-1 text-xs font-medium text-adam-neutral-400 transition-colors duration-200 ease-in-out [@media(hover:hover)]:hover:bg-adam-neutral-950 [@media(hover:hover)]:hover:text-adam-neutral-10">
+                            <Link
+                              to="/editor/$id"
+                              params={{ id: conversation.id }}
+                              className="min-w-0 flex-1"
+                              onClick={() => {
+                                if (isMobile) {
+                                  setIsSidebarOpen(false);
+                                }
+                              }}
+                            >
+                              <span className="line-clamp-1 block text-ellipsis text-nowrap rounded-md p-1 text-xs font-medium text-adam-neutral-400 transition-colors duration-200 ease-in-out [@media(hover:hover)]:hover:bg-adam-neutral-950 [@media(hover:hover)]:hover:text-adam-neutral-10">
                                 {conversation.title}
                               </span>
-                            </li>
-                          </Link>
+                            </Link>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`Delete ${conversation.title}`}
+                                  className="shrink-0 rounded p-1 text-adam-neutral-500 opacity-0 transition-opacity hover:bg-adam-neutral-950 hover:text-red-400 focus-visible:opacity-100 group-hover/item:opacity-100"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="border-[2px] border-adam-neutral-700 bg-adam-background-1">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-adam-neutral-100">
+                                    Delete Conversation
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete “
+                                    {conversation.title}”? This cannot be
+                                    undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      deleteConversation.mutate(conversation.id)
+                                    }
+                                    className="bg-red-600 hover:bg-red-700 dark:bg-red-900 dark:hover:bg-red-800"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </li>
                         );
                       },
                     )}
@@ -277,92 +324,6 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
           className={`${isSidebarOpen ? 'px-4' : 'px-2'} py-4 transition-all duration-300 ease-in-out dark:border-gray-800`}
         >
           <div className={cn('flex flex-col gap-2', isSidebarOpen && 'gap-3')}>
-            {/* GitHub Button - Collapsed state */}
-            {!isSidebarOpen && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href="https://github.com/Adam-CAD/CADAM"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button
-                      variant="adam_dark_collapsed"
-                      className="mb-0 ml-[1px] h-[46px] w-[46px] p-0"
-                    >
-                      <GitHubIcon className="h-[22px] w-[22px]" />
-                    </Button>
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="flex flex-col">
-                  <span className="font-semibold">GitHub</span>
-                  <span className="text-xs text-muted-foreground">
-                    View source code
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* GitHub Button - Expanded state */}
-            {isSidebarOpen && (
-              <a
-                href="https://github.com/Adam-CAD/CADAM"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button
-                  variant="adam_dark"
-                  className="flex h-10 w-full items-center justify-start gap-2"
-                >
-                  <GitHubIcon className="h-[22px] w-[22px] min-w-[22px]" />
-                  GitHub
-                </Button>
-              </a>
-            )}
-
-            {/* Discord Button - Collapsed state */}
-            {!isSidebarOpen && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href="https://discord.com/invite/HKdXDqAHCs"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button
-                      variant="adam_dark_collapsed"
-                      className="mb-0 ml-[1px] h-[46px] w-[46px] p-0"
-                    >
-                      <DiscordIcon className="h-[22px] w-[22px]" />
-                    </Button>
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="flex flex-col">
-                  <span className="font-semibold">Discord</span>
-                  <span className="text-xs text-muted-foreground">
-                    Join our community
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* Discord Button - Expanded state */}
-            {isSidebarOpen && (
-              <a
-                href="https://discord.com/invite/HKdXDqAHCs"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button
-                  variant="adam_dark"
-                  className="flex h-10 w-full items-center justify-start gap-2"
-                >
-                  <DiscordIcon className="h-[22px] w-[22px] min-w-[22px]" />
-                  Discord
-                </Button>
-              </a>
-            )}
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 {renderUserSectionTrigger()}
@@ -443,9 +404,9 @@ function MobileSidebar({
       >
         {/* For aria stuff */}
         <SheetHeader className="hidden">
-          <SheetTitle className="text-adam-text-primary">AdamCAD</SheetTitle>
+          <SheetTitle className="text-adam-text-primary">Kele</SheetTitle>
           <SheetDescription>
-            AI-powered CAD software for everyone
+            AI-powered microneedle array patch design software
           </SheetDescription>
         </SheetHeader>
         <DesktopSidebar isSidebarOpen={true} setIsSidebarOpen={setOpen} />
