@@ -58,10 +58,16 @@ export default defineConfig({
       inlineDynamicImports: true,
     }),
     react(),
-    sentryVitePlugin({
-      org: 'adamcad',
-      project: 'adamcad',
-    }),
+    // Skip Sentry upload when no auth token is present (local / Vercel CI).
+    ...(process.env.SENTRY_AUTH_TOKEN
+      ? [
+          sentryVitePlugin({
+            org: 'adamcad',
+            project: 'adamcad',
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+          }),
+        ]
+      : []),
   ],
   resolve: {
     alias: {
