@@ -62,6 +62,7 @@ export default defineConfig({
     nitro({
       baseURL: normalizedAppBase,
       preset: process.env.VERCEL ? 'vercel' : 'node-server',
+      ...(process.env.VERCEL ? { inlineDynamicImports: true } : {}),
       traceDeps: ['sharp', '@img/sharp-linux-x64'],
     }),
     react(),
