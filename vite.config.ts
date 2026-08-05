@@ -51,6 +51,9 @@ export default defineConfig({
       spa: {
         enabled: true,
         maskPath: normalizedAppBase,
+        prerender: {
+          enabled: false,
+        },
       },
     }),
     nitro({
