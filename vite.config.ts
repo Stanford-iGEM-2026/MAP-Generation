@@ -48,30 +48,21 @@ export default defineConfig({
       router: {
         basepath: normalizedAppBase,
       },
-      // SPA mode always forces a prerender shell; that step crashes on the
-      // Vercel Nitro preset. Use SSR instead and skip prerender entirely.
-      prerender: {
-        enabled: false,
+      spa: {
+        enabled: true,
+        maskPath: normalizedAppBase,
       },
     }),
     nitro({
       baseURL: normalizedAppBase,
       inlineDynamicImports: true,
-      vercel: {
-        entryFormat: 'node',
-      },
+      preset: process.env.VERCEL ? 'vercel' : undefined,
     }),
     react(),
-    // Skip Sentry upload when no auth token is present (local / Vercel CI).
-    ...(process.env.SENTRY_AUTH_TOKEN
-      ? [
-          sentryVitePlugin({
-            org: 'adamcad',
-            project: 'adamcad',
-            authToken: process.env.SENTRY_AUTH_TOKEN,
-          }),
-        ]
-      : []),
+    sentryVitePlugin({
+      org: 'adamcad',
+      project: 'adamcad',
+    }),
   ],
   resolve: {
     alias: {

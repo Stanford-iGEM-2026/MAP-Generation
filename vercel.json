@@ -1,11 +1,10 @@
 {
   "framework": "tanstack-start",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "rewrites": [
+  "redirects": [
     {
       "source": "/",
-      "destination": "/cadam"
+      "destination": "/cadam",
+      "permanent": false
     }
   ]
 }
